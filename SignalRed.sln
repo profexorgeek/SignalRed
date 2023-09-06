@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34024.191
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalRed", "SignalRed\SignalRed.csproj", "{767FBE4D-C12B-463A-9DC9-6AD875A5D38E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{767FBE4D-C12B-463A-9DC9-6AD875A5D38E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{767FBE4D-C12B-463A-9DC9-6AD875A5D38E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{767FBE4D-C12B-463A-9DC9-6AD875A5D38E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{767FBE4D-C12B-463A-9DC9-6AD875A5D38E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C23B95AF-D8E0-47FE-A70E-22CEFE86CB70}
+	EndGlobalSection
+EndGlobal
