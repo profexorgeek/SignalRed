@@ -1,5 +1,4 @@
-using SignalRed.Server.Hubs;
-
+using SignalRed.Common.Hubs;
 
 class Program
 {

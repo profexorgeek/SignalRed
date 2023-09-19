@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
+using SignalRed.Common.Interfaces;
 using SignalRed.Common.Messages;
 
 namespace SignalRed.Client
@@ -8,6 +9,7 @@ namespace SignalRed.Client
         private static SRClient instance;
         private HubConnection? gameHub;
         private bool initialized = false;
+        private string user = "new user";
 
         public static SRClient Instance => instance ?? (instance = new SRClient());
         public string? ClientId => gameHub?.ConnectionId;
@@ -26,11 +28,10 @@ namespace SignalRed.Client
         /// include the protocol (http) and port number
         /// </summary>
         /// <param name="url">The url to connect to, including protocol and port number</param>
-        public async void Connect(Uri url)
+        public async void Connect(Uri url, string username)
         {
             // first, break any existing connections
-            Disconnect();
-
+            await Disconnect();
 
             // now build our hub connection
             var gameHubUrl = new Uri(url, "game");
@@ -38,18 +39,25 @@ namespace SignalRed.Client
                 .WithUrl(gameHubUrl)
                 .Build();
 
-            // register communication paths
+            // handle incoming chat messages
             gameHub.On<ChatMessage>(nameof(IGameClient.ReceiveMessage), message =>
             {
                 HandleChat(message);
             });
 
+            // handle receiving all chat messages
             gameHub.On<List<ChatMessage>>(nameof(IGameClient.ReceiveAllMessages), messages =>
             {
                 for (var i = 0; i < messages.Count; i++)
                 {
                     HandleChat(messages[i]);
                 }
+            });
+
+            // handle new user registration
+            gameHub.On<string>(nameof(IGameClient.RegisterUser), username =>
+            {
+                Console.WriteLine($"{username} has joined the server...");
             });
 
             // manage connection failures
@@ -62,7 +70,9 @@ namespace SignalRed.Client
             // form the connection
             await gameHub.StartAsync();
 
-            // TODO: register username
+            // register username
+            user = username;
+            await gameHub.InvokeAsync(nameof(IGameClient.RegisterUser), user);
 
             // after connecting, we fetch all past messages
             await gameHub.InvokeAsync(nameof(IGameClient.ReceiveAllMessages));
@@ -96,6 +106,7 @@ namespace SignalRed.Client
 
             await gameHub.InvokeAsync(nameof(IGameClient.ReceiveMessage), new ChatMessage(
                 gameHub.ConnectionId,
+                user,
                 chatMessage
                 ));
         }

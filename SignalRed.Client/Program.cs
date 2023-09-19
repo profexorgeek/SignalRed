@@ -1,16 +1,20 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
-using SignalRed.Common.Messages;
-
-namespace SignalRed.Client;
+﻿namespace SignalRed.Client;
 
 class Program
 {
     static async Task Main(string[] args)
     {
         var uri = new Uri("http://localhost:5006");
-        SRClient.Instance.Initialize();
-        SRClient.Instance.Connect(uri);
+        
+        // get a username
+        Console.WriteLine("Enter your username...");
+        string user = Console.ReadLine().Trim();
 
+        // connect to the server as this user
+        SRClient.Instance.Initialize();
+        SRClient.Instance.Connect(uri, user);
+
+        // handle chat
         Console.WriteLine("Enter chat message:\n");
         while(true)
         {

@@ -8,10 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="7.0.10" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\SignalRed.Common\SignalRed.Common.csproj" />
   </ItemGroup>
 
