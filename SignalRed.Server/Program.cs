@@ -1,11 +1,21 @@
-﻿using Microsoft.Extensions.Hosting;
+using SignalRed.Server.Hubs;
 
-await Host.CreateDefaultBuilder(args)
-    .UseOrleans(siloBuilder =>
+
+class Program
+{
+    static void Main(string[] args)
     {
-        siloBuilder
-            .UseLocalhostClustering()
-            .AddMemoryGrainStorage("PubSubStore")
-            .AddMemoryStreams("chat");
-    })
-    .RunConsoleAsync();
+        var builder = WebApplication.CreateBuilder(args);
+        builder.Services.AddSignalR();
+
+        var app = builder.Build();
+        app.UseRouting();
+        app.UseEndpoints(endpoints =>
+        {
+            endpoints.MapHub<GameHub>("/game");
+        });
+        app.Run();
+    }
+}
+
+
