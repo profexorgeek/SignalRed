@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
+using SignalRed.Common.Hubs;
 using SignalRed.Common.Interfaces;
 using SignalRed.Common.Messages;
 
@@ -10,6 +11,8 @@ namespace SignalRed.Client
         private HubConnection? gameHub;
         private bool initialized = false;
         private string user = "new user";
+        private IGameClient gameClient;
+        private ulong localEntityIndex = 0;
 
         public static SRClient Instance => instance ?? (instance = new SRClient());
         public string? ClientId => gameHub?.ConnectionId;
@@ -18,8 +21,12 @@ namespace SignalRed.Client
         /// <summary>
         /// Initializes the client service
         /// </summary>
-        public void Initialize()
+        /// <param name="gameClient">The game client, usually the game engine, which
+        /// must implement IGameClient</param>
+        public void Initialize(IGameClient _gameClient)
         {
+            localEntityIndex = 0;
+            gameClient = _gameClient;
             initialized = true;
         }
 
@@ -28,10 +35,15 @@ namespace SignalRed.Client
         /// include the protocol (http) and port number
         /// </summary>
         /// <param name="url">The url to connect to, including protocol and port number</param>
-        public async void Connect(Uri url, string username)
+        public async Task ConnectAsync(Uri url, string username)
         {
+            if (!initialized)
+            {
+                throw new Exception("Attempted to Connect without initializing SRClient service!");
+            }
+
             // first, break any existing connections
-            await Disconnect();
+            await DisconnectAsync();
 
             // now build our hub connection
             var gameHubUrl = new Uri(url, "game");
@@ -39,52 +51,96 @@ namespace SignalRed.Client
                 .WithUrl(gameHubUrl)
                 .Build();
 
-            // handle incoming chat messages
+            RegisterHubHandlers();
+
+            // form the connection
+            await gameHub.StartAsync();
+
+            // post connection state setup: register username, fetch all messages,
+            // users, current screen, and entities
+            user = username;
+            await gameHub.InvokeAsync(nameof(GameHub.RegisterUser), user);
+            await gameHub.InvokeAsync(nameof(GameHub.ReceiveAllUsers));
+            await gameHub.InvokeAsync(nameof(GameHub.ReceiveAllMessages));
+            await gameHub.InvokeAsync(nameof(GameHub.ReceiveCurrentScreen));
+            await gameHub.InvokeAsync(nameof(GameHub.ReceiveAllEntities));
+
+            Connected = true;
+        }
+
+        /// <summary>
+        /// Registers all of the handlers for various message types the
+        /// hub can handle
+        /// </summary>
+        void RegisterHubHandlers()
+        {
+            // EARLY OUT: bad gamehub
+            if (gameHub == null)
+            {
+                return;
+            }
+
+            // bind connection failure exceptions
+            gameHub.Closed += (exception) =>
+            {
+                return gameClient.FailConnection(exception);
+            };
+
+            // bind screen transitions
+            gameHub.On<string>(nameof(IGameClient.MoveToScreen), screen =>
+            {
+                gameClient.MoveToScreen(screen);
+            });
+
+
+            // handle new user registration
+            gameHub.On<string, string>(nameof(IGameClient.RegisterUser), (id, username) =>
+            {
+                gameClient.RegisterUser(id, username);
+            });
+
+            // handle all user registration
+            gameHub.On<Dictionary<string, string>>(nameof(IGameClient.ReceiveAllUsers), users =>
+            {
+                gameClient.ReceiveAllUsers(users);
+            });
+
+
+            // bind incoming chats
             gameHub.On<ChatMessage>(nameof(IGameClient.ReceiveMessage), message =>
             {
-                HandleChat(message);
+                gameClient.ReceiveMessage(message);
             });
 
             // handle receiving all chat messages
             gameHub.On<List<ChatMessage>>(nameof(IGameClient.ReceiveAllMessages), messages =>
             {
-                for (var i = 0; i < messages.Count; i++)
-                {
-                    HandleChat(messages[i]);
-                }
+                gameClient.ReceiveAllMessages(messages);
             });
 
-            // handle new user registration
-            gameHub.On<string>(nameof(IGameClient.RegisterUser), username =>
+
+            // handle receiving an entity update
+            gameHub.On<string, object>(nameof(IGameClient.UpdateEntity), (typeString, entity) =>
             {
-                Console.WriteLine($"{username} has joined the server...");
+                gameClient.UpdateEntity(typeString, entity);
             });
+        }
 
-            // manage connection failures
-            gameHub.Closed += (exception) =>
-            {
-                Console.WriteLine("Connection closed with error: " + exception?.Message);
-                return Task.CompletedTask;
-            };
-
-            // form the connection
-            await gameHub.StartAsync();
-
-            // register username
-            user = username;
-            await gameHub.InvokeAsync(nameof(IGameClient.RegisterUser), user);
-
-            // after connecting, we fetch all past messages
-            await gameHub.InvokeAsync(nameof(IGameClient.ReceiveAllMessages));
-
-            Connected = true;
+        /// <summary>
+        /// Used to get a unique entity ID when creating
+        /// a new entity
+        /// </summary>
+        public string GetUniqueEntityId()
+        {
+            localEntityIndex++;
+            return $"{ClientId}_{localEntityIndex}";
         }
 
         /// <summary>
         /// Disconnects from the server if a connection is active
         /// </summary>
         /// <returns></returns>
-        public async Task Disconnect()
+        public async Task DisconnectAsync()
         {
             if (gameHub != null)
             {
@@ -99,29 +155,39 @@ namespace SignalRed.Client
         /// </summary>
         /// <param name="chatMessage">The message to send</param>
         /// <returns>A task representing the message send status</returns>
-        public async Task SendMessage(string chatMessage)
+        public async Task SendMessageAsync(string chatMessage)
         {
             // EARLY OUT: swallow message if not connected to anything
             if (!Connected || gameHub == null) return;
 
-            await gameHub.InvokeAsync(nameof(IGameClient.ReceiveMessage), new ChatMessage(
+            await gameHub.InvokeAsync(nameof(GameHub.ReceiveMessage), new ChatMessage(
                 gameHub.ConnectionId,
                 user,
                 chatMessage
                 ));
         }
 
+        /// <summary>
+        /// Sends an entity update to the server
+        /// </summary>
+        /// <typeparam name="T">The type of entity</typeparam>
+        /// <param name="entityUpdateMessage">The entity state to update</param>
+        public async Task UpdateEntityAsync<T>(T entityUpdateMessage) where T : INetworkEntityState
+        {
+            // EARLY OUT: swallow if not connected
+            if (!Connected || gameHub == null) return;
+            await gameHub.InvokeAsync(nameof(GameHub.UpdateEntity), entityUpdateMessage.EntityType, entityUpdateMessage);
+        }
 
         /// <summary>
-        /// Handles an incoming chat message from the server
-        /// 
-        /// TODO: this should probably invoke some sort of event the
-        /// client can listen for
+        /// Makes a request to the server to transition screens
         /// </summary>
-        /// <param name="message">The incoming message</param>
-        void HandleChat(ChatMessage message)
+        /// <param name="screenName">The name of the screen to transition to</param>
+        public async Task RequestScreenTransition(string screenName)
         {
-            Console.WriteLine(message);
+            // EARLY OUT: swallow if not connected
+            if (!Connected || gameHub == null) return;
+            await gameHub.InvokeAsync(nameof(GameHub.MoveToScreen), screenName);
         }
     }
 }

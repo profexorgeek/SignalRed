@@ -2,7 +2,7 @@
 {
     public class ChatMessage
     {
-        public string ClientId { get; set; }
+        public string SenderId { get; set; }
         public string UserName { get; set; }
         public DateTime Time { get; set; }
         public string Message { get; set; } = "";
@@ -11,7 +11,7 @@
 
         public ChatMessage(string? id, string user, string message)
         {
-            ClientId = id;
+            SenderId = id;
             UserName = user;
             Message = message;
             Time = DateTime.UtcNow;

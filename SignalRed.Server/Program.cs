@@ -1,20 +1,4 @@
-using SignalRed.Common.Hubs;
+using SignalRed.Common;
 
-class Program
-{
-    static void Main(string[] args)
-    {
-        var builder = WebApplication.CreateBuilder(args);
-        builder.Services.AddSignalR();
-
-        var app = builder.Build();
-        app.UseRouting();
-        app.UseEndpoints(endpoints =>
-        {
-            endpoints.MapHub<GameHub>("/game");
-        });
-        app.Run();
-    }
-}
-
-
+SRServer.Instance.Initialize();
+await SRServer.Instance.RunAsync(5000);
