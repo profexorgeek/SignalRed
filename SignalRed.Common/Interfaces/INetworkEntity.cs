@@ -1,6 +1,0 @@
-﻿namespace SignalRed.Common.Interfaces
-{
-    
-
-    
-}

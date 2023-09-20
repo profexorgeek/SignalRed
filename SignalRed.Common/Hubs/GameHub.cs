@@ -27,7 +27,7 @@ namespace SignalRed.Common.Hubs
         }
 
 
-        public async Task CreateOrUpdateUser(UserMessage message)
+        public async Task UpdateUser(UserMessage message)
         {
             var existing = users.Where(u => u.ClientId == message.ClientId).FirstOrDefault();
             if (existing != null)
@@ -80,76 +80,52 @@ namespace SignalRed.Common.Hubs
 
         public async Task UpdateEntity(EntityMessage message)
         {
-
-        }
-
-
-
-
-        /// <summary>
-        /// Notifies all clients that they should update the 
-        /// provided entity.
-        /// </summary>
-        /// <typeparam name="T">The type of entity to update</typeparam>
-        /// <param name="entityToUpdate">The entity to update</param>
-        public async Task UpdateEntity(EntityMessage message)
-        {
-            Type targetType = Type.GetType(typeString) ?? typeof(INetworkEntityState);
-            var rawJson = entityElement.GetRawText();
-            var entityToUpdate = JsonSerializer.Deserialize(rawJson, targetType);
-            var entityAsGeneric = (INetworkEntityState)entityToUpdate;
-
-            if(entityAsGeneric == null)
-            {
-                throw new Exception($"Failed to deserialize entity of type {typeString}, update message not implement INetworkEntityState");
-            }
-
-            string id = entityAsGeneric.EntityId;
-            bool success = false;
-            switch(entityAsGeneric.UpdateType)
+            var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+            switch(message.UpdateType)
             {
                 case UpdateType.Unknown:
-                    // NOOP, shouldn't be here!
+                    // NOOP
                     break;
                 case UpdateType.Create:
-                    if (entities.ContainsKey(id))
+                    if(existing == null)
                     {
-                        throw new Exception("Attempted to create an entity with an ID that already exists!");
+                        entities.Add(message);
                     }
-                    entities.Add(id, entityAsGeneric);
-                    success = true;
+                    else
+                    {
+                        throw new Exception($"Attempted to create entity {message.EntityId} whose ID already exists");
+                    }
                     break;
                 case UpdateType.Update:
-                    if (entities.ContainsKey(id))
+                    if(existing == null)
                     {
-                        entities[id] = entityAsGeneric;
+                        throw new Exception($"Attempted to update entity {message.EntityId} who does not exist on the server.");
                     }
-                    success = true;
+                    else
+                    {
+                        entities.Remove(existing);
+                        entities.Add(message);
+                    }
                     break;
                 case UpdateType.Delete:
-                    if(entities.ContainsKey(id))
+                    if(existing == null)
                     {
-                        entities.Remove(id);
-                        success = true;
+                        throw new Exception($"Attempted to delete entity {message.EntityId} which does not exist on the server.");
+                    }
+                    else
+                    {
+                        entities.Remove(existing);
                     }
                     break;
             }
 
-            if(success)
-            {
-                await Clients.All.UpdateEntity(typeString, entityToUpdate);
-            }
+            await Clients.All.UpdateEntity(message);
         }
-
-        /// <summary>
-        /// Provides the caller with all entities known to the server
-        /// </summary>
-        public async Task ReceiveAllEntities()
+        public async Task RequestAllEntities()
         {
-            Console.WriteLine("Received request for all entities");
-            foreach(var kvp in  entities)
+            foreach(var entity in entities)
             {
-                await Clients.Caller.UpdateEntity(kvp.Value.EntityType, kvp.Value);
+                await Clients.Caller.UpdateEntity(entity);
             }
         }
     }

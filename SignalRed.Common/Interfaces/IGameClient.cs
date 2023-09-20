@@ -25,16 +25,12 @@ namespace SignalRed.Common.Interfaces
         /// </summary>
         /// <param name="username">The new username</param>
         Task RegisterUser(UserMessage message);
-
         /// <summary>
         /// Called by the server when an existing user is deleted. Usually called before
         /// disconnecting to gracefully disconnect.
         /// </summary>
         /// <param name="message">The user to remove</param>
         Task DeleteUser(UserMessage message);
-
-        
-
 
         /// <summary>
         /// Called when a new message is received from the server
@@ -43,10 +39,9 @@ namespace SignalRed.Common.Interfaces
         Task ReceiveMessage(ChatMessage message);
 
         /// <summary>
-        /// Called when an entity update is received.
+        /// Called when an entity is updated (created, updated, or deleted)
         /// </summary>
-        /// <typeparam name="T">The entity message type</typeparam>
-        /// <param name="entityToUpdate">The entity state data to update</param>
-        Task UpdateEntity(string type, object entityData);
+        /// <param name="message">The entity message</param>
+        Task UpdateEntity(EntityMessage message);
     }
 }
