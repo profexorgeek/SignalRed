@@ -17,7 +17,6 @@ namespace SignalRed.Common.Messages
         public string OwnerId { get; set; }
         public string EntityId { get; set; }
         public string EntityType { get; set; }
-        public UpdateType UpdateType { get; set; }
         public string Payload { get; private set; }
 
         public void SetPayload<T>(T state)

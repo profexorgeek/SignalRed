@@ -26,7 +26,7 @@ class Program
                 }
             }
         }
-        await SRClient.Instance.DisconnectAsync();
+        await SRClient.Instance.Disconnect();
     }
 }
 

@@ -19,7 +19,6 @@ namespace SignalRed.Common.Interfaces
         /// <param name="screenName">The target screen to move to</param>
         Task MoveToScreen(ScreenMessage message);
 
-
         /// <summary>
         /// Called when a new user joins the server or a user changes their name
         /// </summary>
@@ -32,16 +31,36 @@ namespace SignalRed.Common.Interfaces
         /// <param name="message">The user to remove</param>
         Task DeleteUser(UserMessage message);
 
+
         /// <summary>
         /// Called when a new message is received from the server
         /// </summary>
         /// <param name="message">The message</param>
-        Task ReceiveMessage(ChatMessage message);
+        Task ReceiveChat(ChatMessage message);
+        /// <summary>
+        /// Called when the server notifies client that the chat queue should be cleared
+        /// </summary>
+        Task DeleteAllChats();
 
         /// <summary>
-        /// Called when an entity is updated (created, updated, or deleted)
+        /// Called by the server when an entity is created
         /// </summary>
-        /// <param name="message">The entity message</param>
+        /// <param name="message">The entity to create</param>
+        Task CreateEntity(EntityMessage message);
+        /// <summary>
+        /// Called by the server when an entity is updated. If this
+        /// is a reckoning message, the client should force the incoming state
+        /// to ensure game consistency.
+        /// </summary>
+        /// <param name="message">The entity to update</param>
+        /// <param name="reckoning">If this is a reckoning message</param>
         Task UpdateEntity(EntityMessage message);
+        /// <summary>
+        /// Called by the server when an entity is deleted
+        /// </summary>
+        /// <param name="message">The entity to delete</param>
+        /// <returns></returns>
+        Task DeleteEntity(EntityMessage message);
+        Task ReckonEntities(List<EntityMessage> entities);
     }
 }

@@ -2,9 +2,18 @@
 using SignalRed.Common.Hubs;
 using SignalRed.Common.Interfaces;
 using SignalRed.Common.Messages;
+using System.Diagnostics;
+using System.Net;
 
 namespace SignalRed.Client
 {
+    // TODOs
+    // This client should have some sort of setting that defines whether it's
+    // the game authority? Only the game authority should have the right to kick
+    // players or force screen transitions. Alternatively, this could be up to the
+    // implementing party and this client just dumbly allows any kind of well-formed
+    // message?
+
     public class SRClient
     {
         private static SRClient instance;
@@ -32,11 +41,21 @@ namespace SignalRed.Client
         }
 
         /// <summary>
+        /// Used to get a unique entity ID when creating
+        /// a new entity
+        /// </summary>
+        public string GetUniqueEntityId()
+        {
+            localEntityIndex++;
+            return $"{ClientId}_{localEntityIndex}";
+        }
+
+        /// <summary>
         /// Connects to a server at the provided URL, which should
         /// include the protocol (http) and port number
         /// </summary>
         /// <param name="url">The url to connect to, including protocol and port number</param>
-        public async Task ConnectAsync(Uri url, string username)
+        public async Task Connect(Uri url, string username)
         {
             if (!initialized)
             {
@@ -44,7 +63,7 @@ namespace SignalRed.Client
             }
 
             // first, break any existing connections
-            await DisconnectAsync();
+            await Disconnect();
 
             // now build our hub connection
             var gameHubUrl = new Uri(url, "game");
@@ -57,70 +76,23 @@ namespace SignalRed.Client
             // form the connection
             await gameHub.StartAsync();
 
-            // post connection state setup: register username, fetch all messages,
-            // users, current screen, and entities
             user = username;
-            await gameHub.InvokeAsync(nameof(GameHub.RegisterUser), user);
-            await gameHub.InvokeAsync(nameof(GameHub.ReceiveAllUsers));
-            await gameHub.InvokeAsync(nameof(GameHub.ReceiveAllMessages));
-            await gameHub.InvokeAsync(nameof(GameHub.ReceiveCurrentScreen));
-            await gameHub.InvokeAsync(nameof(GameHub.ReceiveAllEntities));
+            await UpdateUser(new UserMessage(ClientId, user));
 
             Connected = true;
         }
-
-        
-
         /// <summary>
-        /// Used to get a unique entity ID when creating
-        /// a new entity
+        /// Disconnects from the server if a connection is active
         /// </summary>
-        public string GetUniqueEntityId()
-        {
-            localEntityIndex++;
-            return $"{ClientId}_{localEntityIndex}";
-        }
-
-        public async Task RequestCreateEntity<T>(T entityState)
+        /// <returns></returns>
+        public async Task Disconnect()
         {
             if (!initialized || !Connected || gameHub == null) return;
 
-            var msg = new EntityMessage()
-            {
-                OwnerId = ClientId,
-                EntityId = GetUniqueEntityId(),
-                EntityType = entityState.GetType().FullName,
-                UpdateType = UpdateType.Create
-            };
-            msg.SetPayload(entityState);
-        }
+            await DeleteUser(new UserMessage(ClientId, user));
+            await gameHub.StopAsync();
 
-        
-
-        /// <summary>
-        /// Sends a chat message
-        /// </summary>
-        /// <param name="chatMessage">The message to send</param>
-        /// <returns>A task representing the message send status</returns>
-        public async Task SendMessageAsync(string chatMessage)
-        {
-            if (!initialized || !Connected || gameHub == null) return;
-            await gameHub.InvokeAsync(nameof(GameHub.ReceiveMessage), new ChatMessage(
-                gameHub.ConnectionId,
-                user,
-                chatMessage
-                ));
-        }
-
-        /// <summary>
-        /// Sends an entity update to the server
-        /// </summary>
-        /// <typeparam name="T">The type of entity</typeparam>
-        /// <param name="entityUpdateMessage">The entity state to update</param>
-        public async Task UpdateEntityAsync<T>(T entityUpdateMessage) where T : INetworkEntityState
-        {
-            if (!initialized || !Connected || gameHub == null) return;
-            await gameHub.InvokeAsync(nameof(GameHub.UpdateEntity), entityUpdateMessage.EntityType, entityUpdateMessage);
+            Connected = false;
         }
 
         /// <summary>
@@ -129,25 +101,129 @@ namespace SignalRed.Client
         /// <param name="screenName">The name of the screen to transition to</param>
         public async Task RequestScreenTransition(string screenName)
         {
-            if (!initialized || !Connected || gameHub == null) return;
-            await gameHub.InvokeAsync(nameof(GameHub.MoveToScreen), screenName);
+            await TryInvoke(nameof(GameHub.MoveToScreen), new ScreenMessage(screenName));
+        }
+        /// <summary>
+        /// Requests that the server re-sends a move-to-screen event
+        /// to this client, which will trigger a screen change on the IGameClient
+        /// </summary>
+        public async Task RequestCurrentScreen()
+        {
+            await TryInvoke(nameof(GameHub.RequestCurrentScreen));
         }
 
         /// <summary>
-        /// Disconnects from the server if a connection is active
+        /// Requests that the server resend each joined member (which will include
+        /// this client). Usually called when first joining a server.
         /// </summary>
-        /// <returns></returns>
-        public async Task DisconnectAsync()
+        public async Task RefreshUserList()
         {
-            if (gameHub != null)
-            {
-                await gameHub.StopAsync();
-            }
-
-            Connected = false;
+            await TryInvoke(nameof(GameHub.RequestAllUsers));
+        }
+        /// <summary>
+        /// Updates the provided user. The server will register the user if they
+        /// are new, otherwise it will update the username associated with the
+        /// connected client if it has changed.
+        /// </summary>
+        /// <param name="message">The UserMessage with user details</param>
+        public async Task UpdateUser(UserMessage message)
+        {
+            await TryInvoke<UserMessage>(nameof(GameHub.UpdateUser), message);
+        }
+        /// <summary>
+        /// Sends a request to delete the provided user.
+        /// </summary>
+        /// <param name="message">The user to delete</param>
+        public async Task DeleteUser(UserMessage message)
+        {
+            await TryInvoke<UserMessage>(nameof(GameHub.DeleteUser), message);
         }
 
+        /// <summary>
+        /// Sends a chat message to all players on the server.
+        /// </summary>
+        /// <param name="message">The message string</param>
+        public async Task SendChat(string message)
+        {
+            var msg = new ChatMessage(
+                ClientId,
+                user,
+                message);
+            await TryInvoke<ChatMessage>(nameof(GameHub.SendChat), message);
+        }
+        /// <summary>
+        /// Requests that the server resend all chat messages. Usually called
+        /// when first joining or when a complete refresh is needed.
+        /// </summary>
+        public async Task RequestAllChats()
+        {
+            await TryInvoke(nameof(GameHub.RequestAllChats));
+        }
+        /// <summary>
+        /// Requests that the server delete chat message history. Useful when starting a new
+        /// lobby or new game to clear old chat messages.
+        /// </summary>
+        public async Task DeleteAllChats()
+        {
+            await TryInvoke(nameof(GameHub.DeleteAllChats));
+        }
 
+        /// <summary>
+        /// Sends a request for an entity to be created, which will
+        /// bounce back to the IGameClient when the server echoes it
+        /// back to all clients
+        /// </summary>
+        /// <param name="message">The entity creation message</param>
+        public async Task RequestCreateEntity(EntityMessage message)
+        {
+            await TryInvoke(nameof(GameHub.CreateEntity), message);
+        }
+        /// <summary>
+        /// Sends a request to update an entity, which will bounce back
+        /// to the IGameClient when the server echoes it to all clients
+        /// </summary>
+        /// <param name="message">The entity to update</param>
+        public async Task RequestUpdateEntity(EntityMessage message)
+        {
+            await TryInvoke(nameof(GameHub.UpdateEntity), message);
+        }
+        /// <summary>
+        /// Sends a request to delete an entity, which will bounce back to the
+        /// IGameClient when the server echoes the message to all clients
+        /// </summary>
+        /// <param name="message">The entity to delete</param>
+        public async Task RequestDeleteEntity(EntityMessage message)
+        {
+            await TryInvoke(nameof(GameHub.UpdateEntity), message);
+        }
+        /// <summary>
+        /// Sends a request to the server to provide a reckoning message that
+        /// contains all entities
+        /// </summary>
+        public async Task Reckon()
+        {
+            await TryInvoke(nameof(GameHub.ReckonAllEntities));
+        }
+
+        /// <summary>
+        /// Attempts to invoke the provided method name on the hub.
+        /// 
+        /// Overloads for a message argument or no argument.
+        /// </summary>
+        /// <param name="methodName">The name of the remote method to invoke</param>
+        async Task<bool> TryInvoke<T>(string methodName, T message)
+        {
+            if (!initialized || !Connected || gameHub == null) return false;
+            await gameHub.InvokeAsync(methodName, message);
+            return true;
+        }
+        async Task<bool> TryInvoke(string methodName)
+        {
+            if (!initialized || !Connected || gameHub == null) return false;
+            await gameHub.InvokeAsync(methodName);
+            return true;
+        }
+        
         /// <summary>
         /// Registers all of the handlers for various message types the
         /// hub can handle
@@ -160,50 +236,30 @@ namespace SignalRed.Client
                 return;
             }
 
-            // bind connection failure exceptions
-            gameHub.Closed += (exception) =>
-            {
-                return gameClient.FailConnection(exception);
-            };
+            gameHub.Closed += (exception) => gameClient.FailConnection(exception);
 
-            // bind screen transitions
-            gameHub.On<string>(nameof(IGameClient.MoveToScreen), screen =>
-            {
-                gameClient.MoveToScreen(screen);
-            });
+            gameHub.On<ScreenMessage>(nameof(IGameClient.MoveToScreen),
+                message => gameClient.MoveToScreen(message));
 
+            gameHub.On<UserMessage>(nameof(IGameClient.RegisterUser),
+                message => gameClient.RegisterUser(message));
+            gameHub.On<UserMessage>(nameof(IGameClient.DeleteUser),
+                message => gameClient.DeleteUser(message));
 
-            // handle new user registration
-            gameHub.On<string, string>(nameof(IGameClient.RegisterUser), (id, username) =>
-            {
-                gameClient.RegisterUser(id, username);
-            });
+            gameHub.On<ChatMessage>(nameof(IGameClient.ReceiveChat),
+                message => gameClient.ReceiveChat(message));
+            gameHub.On(nameof(IGameClient.DeleteAllChats),
+                () => gameClient.DeleteAllChats());
 
-            // handle all user registration
-            gameHub.On<Dictionary<string, string>>(nameof(IGameClient.ReceiveAllUsers), users =>
-            {
-                gameClient.ReceiveAllUsers(users);
-            });
-
-
-            // bind incoming chats
-            gameHub.On<ChatMessage>(nameof(IGameClient.ReceiveMessage), message =>
-            {
-                gameClient.ReceiveMessage(message);
-            });
-
-            // handle receiving all chat messages
-            gameHub.On<List<ChatMessage>>(nameof(IGameClient.ReceiveAllMessages), messages =>
-            {
-                gameClient.ReceiveAllMessages(messages);
-            });
-
-
-            // handle receiving an entity update
-            gameHub.On<string, object>(nameof(IGameClient.UpdateEntity), (typeString, entity) =>
-            {
-                gameClient.UpdateEntity(typeString, entity);
-            });
+            gameHub.On<EntityMessage>(nameof(IGameClient.CreateEntity),
+                message => gameClient.CreateEntity(message));
+            gameHub.On<EntityMessage>(nameof(IGameClient.UpdateEntity),
+                message => gameClient.UpdateEntity(message));
+            gameHub.On<EntityMessage>(nameof(IGameClient.DeleteEntity),
+                message => gameClient.DeleteEntity(message));
+            gameHub.On<List<EntityMessage>>(nameof(IGameClient.ReckonEntities),
+                message => gameClient.ReckonEntities(message));
+            
         }
     }
 }

@@ -38,7 +38,7 @@ namespace SignalRed.Client
             var uri = new Uri("http://localhost:5000");
 
             SRClient.Instance.Initialize(this);
-            await SRClient.Instance.ConnectAsync(uri, user);
+            await SRClient.Instance.Connect(uri, user);
 
             // if we have a null screen, we should request a screen transition
             // this just tests that the first client to join sets the screen and
@@ -167,11 +167,11 @@ namespace SignalRed.Client
         {
             for (var i = 0; i < message.Count; i++)
             {
-                ReceiveMessage(message[i]);
+                ReceiveChat(message[i]);
             }
             return Task.CompletedTask;
         }
-        public Task ReceiveMessage(ChatMessage message)
+        public Task ReceiveChat(ChatMessage message)
         {
             Console.WriteLine(message);
             return Task.CompletedTask;

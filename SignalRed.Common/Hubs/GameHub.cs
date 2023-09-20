@@ -26,9 +26,9 @@ namespace SignalRed.Common.Hubs
             await Clients.Caller.MoveToScreen(currentScreen);
         }
 
-
         public async Task UpdateUser(UserMessage message)
         {
+            if (string.IsNullOrWhiteSpace(message.ClientId)) return;
             var existing = users.Where(u => u.ClientId == message.ClientId).FirstOrDefault();
             if (existing != null)
             {
@@ -45,87 +45,118 @@ namespace SignalRed.Common.Hubs
         }
         public async Task RequestAllUsers()
         {
-            for(var i = 0; i < users.Count; i++)
+            CleanUserList();
+            foreach(var user in users)
             {
-                await Clients.Caller.RegisterUser(users[i]);
+                await Clients.Caller.RegisterUser(user);
             }
         }
         public async Task DeleteUser(UserMessage message)
         {
-            var existing = users.Where(u => u.ClientId == message.ClientId).FirstOrDefault();
-            if(existing == null)
-            {
-                throw new Exception($"Attempted to remove {message.UserName} but they don't exist on the server!");
-            }
-            Console.WriteLine($"{message.UserName} has left the server.");
-            users.Remove(existing);
-        }
+            if (string.IsNullOrWhiteSpace(message.ClientId)) return;
 
+            var existing = users.Where(u => u.ClientId == message.ClientId).FirstOrDefault();
+            if (existing == null)
+            {
+                Console.WriteLine($"Attempted to remove {message.UserName} but they don't exist on the server!");
+            }
+            else
+            {
+                Console.WriteLine($"{message.UserName} has left the server.");
+                users.Remove(existing);
+
+                // TODO: force disconnect?
+            }
+        }
 
         public async Task SendChat(ChatMessage message)
         {
             // TODO: add targeted messages (DMs)
             messages.Add(message);
             Console.WriteLine("Message: " + message);
-            await Clients.All.ReceiveMessage(message);
+            await Clients.All.ReceiveChat(message);
         }
-        public async Task RequestAllMessages()
+        public async Task RequestAllChats()
         {
             foreach(var msg in messages)
             {
-                await Clients.Caller.ReceiveMessage(msg);
+                await Clients.Caller.ReceiveChat(msg);
             }
+        }
+        public async Task DeleteAllChats()
+        {
+            messages.Clear();
+            await Clients.All.DeleteAllChats();
         }
 
 
+        public async Task CreateEntity(EntityMessage message)
+        {
+            if (string.IsNullOrWhiteSpace(message.EntityId)) return;
+            var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+            if(existing == null)
+            {
+                entities.Add(message);
+                await Clients.All.CreateEntity(message);
+            }
+        }
         public async Task UpdateEntity(EntityMessage message)
         {
+            if (string.IsNullOrWhiteSpace(message.EntityId)) return;
             var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
-            switch(message.UpdateType)
+            if(existing != null)
             {
-                case UpdateType.Unknown:
-                    // NOOP
-                    break;
-                case UpdateType.Create:
-                    if(existing == null)
-                    {
-                        entities.Add(message);
-                    }
-                    else
-                    {
-                        throw new Exception($"Attempted to create entity {message.EntityId} whose ID already exists");
-                    }
-                    break;
-                case UpdateType.Update:
-                    if(existing == null)
-                    {
-                        throw new Exception($"Attempted to update entity {message.EntityId} who does not exist on the server.");
-                    }
-                    else
-                    {
-                        entities.Remove(existing);
-                        entities.Add(message);
-                    }
-                    break;
-                case UpdateType.Delete:
-                    if(existing == null)
-                    {
-                        throw new Exception($"Attempted to delete entity {message.EntityId} which does not exist on the server.");
-                    }
-                    else
-                    {
-                        entities.Remove(existing);
-                    }
-                    break;
-            }
+                entities.Remove(existing);
+                entities.Add(message);
 
-            await Clients.All.UpdateEntity(message);
+                await Clients.All.UpdateEntity(message);
+            }
         }
-        public async Task RequestAllEntities()
+        public async Task DeleteEntity(EntityMessage message)
         {
-            foreach(var entity in entities)
+            if (string.IsNullOrWhiteSpace(message.EntityId)) return;
+            var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+            if(existing != null)
             {
-                await Clients.Caller.UpdateEntity(entity);
+                entities.Remove(existing);
+                await Clients.All.DeleteEntity(message);
+            }
+        }
+        public async Task ReckonAllEntities()
+        {
+            CleanUserList();
+            CleanEntityList();
+
+            await Clients.Caller.ReckonEntities(entities);
+        }
+
+        /// <summary>
+        /// Cleans the user list, removing any users that aren't found
+        /// in the connected clients
+        /// </summary>
+        void CleanUserList()
+        {
+            for (var i = users.Count - 1; i > -1; i--)
+            {
+                if (Clients.Client(users[i].ClientId) == null)
+                {
+                    users.RemoveAt(i);
+                }
+            }
+        }
+        /// <summary>
+        /// Removes any entities that don't have owners, purging entities owned
+        /// by disconnected users.
+        /// </summary>
+        void CleanEntityList()
+        {
+            for(var i = entities.Count - 1; i > -1; i--)
+            {
+                var entity = entities[i];
+                if(users.Any(u => u.ClientId == entity.OwnerId) == false)
+                {
+                    entities.RemoveAt(i);
+                }
             }
         }
     }
