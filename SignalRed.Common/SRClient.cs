@@ -16,6 +16,7 @@ namespace SignalRed.Client
 
         public static SRClient Instance => instance ?? (instance = new SRClient());
         public string? ClientId => gameHub?.ConnectionId;
+        public string CurrentScreen { get; private set; } = "";
         public bool Connected { get; private set; } = false;
 
         /// <summary>
@@ -67,6 +68,85 @@ namespace SignalRed.Client
 
             Connected = true;
         }
+
+        
+
+        /// <summary>
+        /// Used to get a unique entity ID when creating
+        /// a new entity
+        /// </summary>
+        public string GetUniqueEntityId()
+        {
+            localEntityIndex++;
+            return $"{ClientId}_{localEntityIndex}";
+        }
+
+        public async Task RequestCreateEntity<T>(T entityState)
+        {
+            if (!initialized || !Connected || gameHub == null) return;
+
+            var msg = new EntityMessage()
+            {
+                OwnerId = ClientId,
+                EntityId = GetUniqueEntityId(),
+                EntityType = entityState.GetType().FullName,
+                UpdateType = UpdateType.Create
+            };
+            msg.SetPayload(entityState);
+        }
+
+        
+
+        /// <summary>
+        /// Sends a chat message
+        /// </summary>
+        /// <param name="chatMessage">The message to send</param>
+        /// <returns>A task representing the message send status</returns>
+        public async Task SendMessageAsync(string chatMessage)
+        {
+            if (!initialized || !Connected || gameHub == null) return;
+            await gameHub.InvokeAsync(nameof(GameHub.ReceiveMessage), new ChatMessage(
+                gameHub.ConnectionId,
+                user,
+                chatMessage
+                ));
+        }
+
+        /// <summary>
+        /// Sends an entity update to the server
+        /// </summary>
+        /// <typeparam name="T">The type of entity</typeparam>
+        /// <param name="entityUpdateMessage">The entity state to update</param>
+        public async Task UpdateEntityAsync<T>(T entityUpdateMessage) where T : INetworkEntityState
+        {
+            if (!initialized || !Connected || gameHub == null) return;
+            await gameHub.InvokeAsync(nameof(GameHub.UpdateEntity), entityUpdateMessage.EntityType, entityUpdateMessage);
+        }
+
+        /// <summary>
+        /// Makes a request to the server to transition screens
+        /// </summary>
+        /// <param name="screenName">The name of the screen to transition to</param>
+        public async Task RequestScreenTransition(string screenName)
+        {
+            if (!initialized || !Connected || gameHub == null) return;
+            await gameHub.InvokeAsync(nameof(GameHub.MoveToScreen), screenName);
+        }
+
+        /// <summary>
+        /// Disconnects from the server if a connection is active
+        /// </summary>
+        /// <returns></returns>
+        public async Task DisconnectAsync()
+        {
+            if (gameHub != null)
+            {
+                await gameHub.StopAsync();
+            }
+
+            Connected = false;
+        }
+
 
         /// <summary>
         /// Registers all of the handlers for various message types the
@@ -124,70 +204,6 @@ namespace SignalRed.Client
             {
                 gameClient.UpdateEntity(typeString, entity);
             });
-        }
-
-        /// <summary>
-        /// Used to get a unique entity ID when creating
-        /// a new entity
-        /// </summary>
-        public string GetUniqueEntityId()
-        {
-            localEntityIndex++;
-            return $"{ClientId}_{localEntityIndex}";
-        }
-
-        /// <summary>
-        /// Disconnects from the server if a connection is active
-        /// </summary>
-        /// <returns></returns>
-        public async Task DisconnectAsync()
-        {
-            if (gameHub != null)
-            {
-                await gameHub.StopAsync();
-            }
-
-            Connected = false;
-        }
-
-        /// <summary>
-        /// Sends a chat message
-        /// </summary>
-        /// <param name="chatMessage">The message to send</param>
-        /// <returns>A task representing the message send status</returns>
-        public async Task SendMessageAsync(string chatMessage)
-        {
-            // EARLY OUT: swallow message if not connected to anything
-            if (!Connected || gameHub == null) return;
-
-            await gameHub.InvokeAsync(nameof(GameHub.ReceiveMessage), new ChatMessage(
-                gameHub.ConnectionId,
-                user,
-                chatMessage
-                ));
-        }
-
-        /// <summary>
-        /// Sends an entity update to the server
-        /// </summary>
-        /// <typeparam name="T">The type of entity</typeparam>
-        /// <param name="entityUpdateMessage">The entity state to update</param>
-        public async Task UpdateEntityAsync<T>(T entityUpdateMessage) where T : INetworkEntityState
-        {
-            // EARLY OUT: swallow if not connected
-            if (!Connected || gameHub == null) return;
-            await gameHub.InvokeAsync(nameof(GameHub.UpdateEntity), entityUpdateMessage.EntityType, entityUpdateMessage);
-        }
-
-        /// <summary>
-        /// Makes a request to the server to transition screens
-        /// </summary>
-        /// <param name="screenName">The name of the screen to transition to</param>
-        public async Task RequestScreenTransition(string screenName)
-        {
-            // EARLY OUT: swallow if not connected
-            if (!Connected || gameHub == null) return;
-            await gameHub.InvokeAsync(nameof(GameHub.MoveToScreen), screenName);
         }
     }
 }

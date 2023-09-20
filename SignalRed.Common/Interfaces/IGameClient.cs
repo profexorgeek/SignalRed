@@ -17,23 +17,23 @@ namespace SignalRed.Common.Interfaces
         /// new screen.
         /// </summary>
         /// <param name="screenName">The target screen to move to</param>
-        Task MoveToScreen(string screenName);
+        Task MoveToScreen(ScreenMessage message);
 
 
         /// <summary>
-        /// Called when a new user joins the server, or an existing user changes
-        /// their name
+        /// Called when a new user joins the server or a user changes their name
         /// </summary>
         /// <param name="username">The new username</param>
-        Task RegisterUser(string id, string username);
+        Task RegisterUser(UserMessage message);
 
         /// <summary>
-        /// Called when first joining the server to get the list
-        /// of other members.
+        /// Called by the server when an existing user is deleted. Usually called before
+        /// disconnecting to gracefully disconnect.
         /// </summary>
-        /// <param name="users">A KVP containing id:username pairs</param>
-        Task ReceiveAllUsers(Dictionary<string, string> users);
+        /// <param name="message">The user to remove</param>
+        Task DeleteUser(UserMessage message);
 
+        
 
 
         /// <summary>
@@ -41,13 +41,6 @@ namespace SignalRed.Common.Interfaces
         /// </summary>
         /// <param name="message">The message</param>
         Task ReceiveMessage(ChatMessage message);
-
-        /// <summary>
-        /// Called when all existing messages from this session are received
-        /// from the server.
-        /// </summary>
-        /// <param name="messages">The messages received from the server</param>
-        Task ReceiveAllMessages(List<ChatMessage> messages);
 
         /// <summary>
         /// Called when an entity update is received.

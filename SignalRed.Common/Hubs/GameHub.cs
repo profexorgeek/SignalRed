@@ -3,90 +3,86 @@ using SignalRed.Common.Interfaces;
 using SignalRed.Common.Messages;
 using System.Reflection.Metadata.Ecma335;
 using System.Text.Json;
+using System.Linq;
+using System.Linq.Expressions;
 
 namespace SignalRed.Common.Hubs
 {
     public class GameHub : Hub<IGameClient>
     {
         static List<ChatMessage> messages = new List<ChatMessage>();
-        static Dictionary<string, string> users = new Dictionary<string, string>();
-        static Dictionary<string, INetworkEntityState> entities = new Dictionary<string, INetworkEntityState>();
-        static string currentScreen = "";
+        static List<EntityMessage> entities = new List<EntityMessage>();
+        static List<UserMessage> users = new List<UserMessage>();
+        static ScreenMessage currentScreen = new ScreenMessage();
 
-        /// <summary>
-        /// Notifies all clients that they should move to the
-        /// provided screen name.
-        /// </summary>
-        /// <param name="screenName">The target screen name to move to</param>
-        public async Task MoveToScreen(string screenName)
+        public async Task MoveToScreen(ScreenMessage message)
         {
-            Console.WriteLine($"Received request to move to screen: {screenName}");
-            currentScreen = screenName;
-            await Clients.All.MoveToScreen(screenName);
+            Console.WriteLine($"Received request to move to screen: {message.NewScreen}");
+            currentScreen = message;
+            await Clients.All.MoveToScreen(message);
         }
-        public async Task ReceiveCurrentScreen()
+        public async Task RequestCurrentScreen()
         {
             await Clients.Caller.MoveToScreen(currentScreen);
         }
 
 
-        /// <summary>
-        /// Tracks relationship between connection ID and
-        /// human-readable user name. Notifies all clients
-        /// that 
-        /// </summary>
-        /// <param name="username"></param>
-        /// <returns></returns>
-        public async Task RegisterUser(string username)
+        public async Task CreateOrUpdateUser(UserMessage message)
         {
-            var id = Context.ConnectionId;
-            if(users.ContainsKey(id))
+            var existing = users.Where(u => u.ClientId == message.ClientId).FirstOrDefault();
+            if (existing != null)
             {
-                users[id] = username;
+                var oldName = existing.UserName;
+                existing.UserName = message.UserName;
+                Console.WriteLine($"{oldName} has changed their name to {message.UserName}");
             }
             else
             {
-                users.Add(Context.ConnectionId, username);
+                users.Add(message);
+                Console.WriteLine($"{message.UserName} with id {message.ClientId} has joined the server!");
+            }            
+            await Clients.All.RegisterUser(message);
+        }
+        public async Task RequestAllUsers()
+        {
+            for(var i = 0; i < users.Count; i++)
+            {
+                await Clients.Caller.RegisterUser(users[i]);
             }
-            
-            Console.WriteLine("User registered: " + username);
-            await Clients.All.RegisterUser(id, username);
         }
-
-        /// <summary>
-        /// Provides list of all users and their connection ID
-        /// to the calling client
-        /// </summary>
-        public async Task ReceiveAllUsers()
+        public async Task DeleteUser(UserMessage message)
         {
-            Console.WriteLine("Received request for all users");
-            await Clients.Caller.ReceiveAllUsers(users);
+            var existing = users.Where(u => u.ClientId == message.ClientId).FirstOrDefault();
+            if(existing == null)
+            {
+                throw new Exception($"Attempted to remove {message.UserName} but they don't exist on the server!");
+            }
+            Console.WriteLine($"{message.UserName} has left the server.");
+            users.Remove(existing);
         }
 
 
-
-        /// <summary>
-        /// Distributes the incoming message to all clients, including
-        /// the caller.
-        /// </summary>
-        /// <param name="message">The incoming message</param>
-        public async Task ReceiveMessage(ChatMessage message)
+        public async Task SendChat(ChatMessage message)
         {
+            // TODO: add targeted messages (DMs)
             messages.Add(message);
-            Console.WriteLine("Message received: " + message);
+            Console.WriteLine("Message: " + message);
             await Clients.All.ReceiveMessage(message);
-            
+        }
+        public async Task RequestAllMessages()
+        {
+            foreach(var msg in messages)
+            {
+                await Clients.Caller.ReceiveMessage(msg);
+            }
         }
 
-        /// <summary>
-        /// Provides the caller with all chat messages that have
-        /// occurred since the hub was started
-        /// </summary>
-        public async Task ReceiveAllMessages()
+
+        public async Task UpdateEntity(EntityMessage message)
         {
-            Console.WriteLine("Received request for all messages");
-            await Clients.Caller.ReceiveAllMessages(messages);
+
         }
+
 
 
 
@@ -96,7 +92,7 @@ namespace SignalRed.Common.Hubs
         /// </summary>
         /// <typeparam name="T">The type of entity to update</typeparam>
         /// <param name="entityToUpdate">The entity to update</param>
-        public async Task UpdateEntity(string typeString, JsonElement entityElement)
+        public async Task UpdateEntity(EntityMessage message)
         {
             Type targetType = Type.GetType(typeString) ?? typeof(INetworkEntityState);
             var rawJson = entityElement.GetRawText();

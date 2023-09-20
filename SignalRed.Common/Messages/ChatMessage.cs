@@ -2,10 +2,10 @@
 {
     public class ChatMessage
     {
-        public string SenderId { get; set; }
-        public string UserName { get; set; }
-        public DateTime Time { get; set; }
-        public string Message { get; set; } = "";
+        public string SenderId { get; set; } = "Unknown";
+        public string UserName { get; set; } = "Unknown";
+        public DateTime Time { get; set; } = DateTime.UtcNow;
+        public string Message { get; set; } = "Unknown";
 
         public ChatMessage() { }
 
