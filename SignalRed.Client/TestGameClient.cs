@@ -32,32 +32,32 @@ namespace SignalRed.Client
 
             username = $"user#{rand.Next(1, 999)}";
 
-            Console.WriteLine("=== Connecting to Server ===");
+            WriteMessage("=== Connecting to Server ===", ConsoleColor.Cyan);
             await SRClient.Instance.Connect(ServerUrl, username);
 
-            Console.WriteLine("=== Requesting Users ===");
+            WriteMessage("=== Requesting Users ===", ConsoleColor.Cyan);
             await SRClient.Instance.ReckonUsers();
 
-            Console.WriteLine("=== Getting Chats ===");
+            WriteMessage("=== Getting Chats ===", ConsoleColor.Cyan);
             await SRClient.Instance.RequestAllChats();
 
-            Console.WriteLine("=== Getting Current Screen ===");
+            WriteMessage("=== Getting Current Screen ===", ConsoleColor.Cyan);
             await SRClient.Instance.RequestCurrentScreen();
 
-            Console.WriteLine("=== Asking Server to Transition to New Screen ===");
+            WriteMessage("=== Asking Server to Transition to New Screen ===", ConsoleColor.Cyan);
             var screen = $"Screen#{rand.Next(1, 999)}";
             await SRClient.Instance.RequestScreenTransition(screen);
 
-            Console.WriteLine("=== Updating User ===");
+            WriteMessage("=== Updating User ===", ConsoleColor.Cyan);
             username = $"user#{rand.Next(1, 999)}";
             await SRClient.Instance.UpdateUser(
                 new UserMessage(SRClient.Instance.ClientId, username));
 
             var chat = "Hello friends!";
-            Console.WriteLine($"=== Sending Test Chat: {chat} ===");
+            WriteMessage($"=== Sending Test Chat: {chat} ===", ConsoleColor.Cyan);
             await SRClient.Instance.SendChat(chat);
 
-            Console.WriteLine("=== Sending Entity Creation ===");
+            WriteMessage("=== Sending Entity Creation ===", ConsoleColor.Cyan);
             var entity = new EntityState()
             {
                 Name = $"entity#{rand.Next(0, int.MaxValue)}",
@@ -73,63 +73,63 @@ namespace SignalRed.Client
             msg.SetPayload(entity);
             await SRClient.Instance.RequestCreateEntity(msg);
 
-            Console.WriteLine("=== Sending Entity Update ===");
+            WriteMessage("=== Sending Entity Update ===", ConsoleColor.Cyan);
             entity.Name += "--UPDATED";
             msg.SetPayload(entity);
             await SRClient.Instance.RequestUpdateEntity(msg);
 
-            Console.WriteLine("=== Reckoning Entities ===");
+            WriteMessage("=== Reckoning Entities ===", ConsoleColor.Cyan);
             await SRClient.Instance.ReckonEntities();
 
-            //Console.WriteLine("Attempting to delete owned entity...");
+            //WriteMessage("Attempting to delete owned entity...");
             //await SRClient.Instance.RequestDeleteEntity(msg);
 
-            //Console.WriteLine("Attempting to disconnect...");
+            //WriteMessage("Attempting to disconnect...");
             //await SRClient.Instance.Disconnect();
         }
 
         public Task FailConnection(Exception exception)
         {
-            Console.WriteLine("Connection failed!");
+            WriteMessage("Connection failed!", ConsoleColor.Red);
             return Task.CompletedTask;
         }
         public Task MoveToScreen(ScreenMessage message)
         {
             currentScreen = message.NewScreen;
-            Console.WriteLine($"Moved to screen {currentScreen}");
+            WriteMessage($"Moved to screen {currentScreen}", ConsoleColor.Green);
             return Task.CompletedTask;
         }
 
 
         public Task RegisterUser(UserMessage message)
         {
-            Console.WriteLine($"{message.UserName} has joined the server.");
+            WriteMessage($"{message.UserName} has joined the server.", ConsoleColor.Green);
             return Task.CompletedTask;
         }
         public Task DeleteUser(UserMessage message)
         {
-            Console.WriteLine($"{message.UserName} has left the server.");
+            WriteMessage($"{message.UserName} has left the server.", ConsoleColor.Green);
             return Task.CompletedTask;
         }
         public Task ReckonUsers(List<UserMessage> users)
         {
-            Console.WriteLine("Received user reckoning:");
+            WriteMessage("Received user reckoning:", ConsoleColor.Green);
             foreach(var user in users)
             {
-                Console.WriteLine($"- {user.UserName}");
+                WriteMessage($"- {user.UserName}", ConsoleColor.Yellow);
             }
-            Console.WriteLine("User reckoning complete.");
+            WriteMessage("User reckoning complete.", ConsoleColor.Green);
             return Task.CompletedTask;
         }
 
         public Task ReceiveChat(ChatMessage message)
         {
-            Console.WriteLine(message);
+            WriteMessage(message.ToString(), ConsoleColor.Green);
             return Task.CompletedTask;
         }
         public Task DeleteAllChats()
         {
-            Console.WriteLine("Clearing chat log...");
+            WriteMessage("Clearing chat log...", ConsoleColor.Green);
             return Task.CompletedTask;
         }
 
@@ -137,32 +137,36 @@ namespace SignalRed.Client
         public Task CreateEntity(EntityMessage message)
         {
             var state = message.GetPayload<EntityState>();
-            Console.WriteLine($"Received entity CREATE request {state.Name}");
+            WriteMessage($"Received entity CREATE request {state.Name}", ConsoleColor.Green);
             return Task.CompletedTask;
         }
         public Task UpdateEntity(EntityMessage message)
         {
             var state = message.GetPayload<EntityState>();
-            Console.WriteLine($"Received entity UPDATE request {state.Name}");
+            WriteMessage($"Received entity UPDATE request {state.Name}", ConsoleColor.Green);
             return Task.CompletedTask;
         }
         public Task DeleteEntity(EntityMessage message)
         {
             var state = message.GetPayload<EntityState>();
-            Console.WriteLine($"Received entity DELETE request {state.Name}");
+            WriteMessage($"Received entity DELETE request {state.Name}", ConsoleColor.Green);
             return Task.CompletedTask;
         }
         public Task ReckonEntities(List<EntityMessage> entities)
         {
-            Console.WriteLine("Received entity reckoning:");
+            WriteMessage("Received entity reckoning:", ConsoleColor.Green);
             foreach(var message in entities)
             {
                 var state = message.GetPayload<EntityState>();
-                Console.WriteLine($"- {state.Name}");
+                WriteMessage($"- {state.Name}", ConsoleColor.Yellow);
             }
             return Task.CompletedTask;
         }
 
-        
+        void WriteMessage(string msg, ConsoleColor color = ConsoleColor.White)
+        {
+            Console.ForegroundColor = color;
+            Console.WriteLine(msg);
+        }
     }
 }
