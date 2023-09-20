@@ -81,6 +81,11 @@ namespace SignalRed.Client
 
             Connected = true;
         }
+        public async Task Connect(string url, string username)
+        {
+            var uri = new Uri(url);
+            await Connect(uri, username);
+        }
         /// <summary>
         /// Disconnects from the server if a connection is active
         /// </summary>
@@ -116,9 +121,9 @@ namespace SignalRed.Client
         /// Requests that the server resend each joined member (which will include
         /// this client). Usually called when first joining a server.
         /// </summary>
-        public async Task RefreshUserList()
+        public async Task ReckonUsers()
         {
-            await TryInvoke(nameof(GameHub.RequestAllUsers));
+            await TryInvoke(nameof(GameHub.ReckonUsers));
         }
         /// <summary>
         /// Updates the provided user. The server will register the user if they
@@ -143,12 +148,12 @@ namespace SignalRed.Client
         /// Sends a chat message to all players on the server.
         /// </summary>
         /// <param name="message">The message string</param>
-        public async Task SendChat(string message)
+        public async Task SendChat(string chat)
         {
-            var msg = new ChatMessage(
+            var message = new ChatMessage(
                 ClientId,
                 user,
-                message);
+                chat);
             await TryInvoke<ChatMessage>(nameof(GameHub.SendChat), message);
         }
         /// <summary>
@@ -200,7 +205,7 @@ namespace SignalRed.Client
         /// Sends a request to the server to provide a reckoning message that
         /// contains all entities
         /// </summary>
-        public async Task Reckon()
+        public async Task ReckonEntities()
         {
             await TryInvoke(nameof(GameHub.ReckonAllEntities));
         }
@@ -245,6 +250,8 @@ namespace SignalRed.Client
                 message => gameClient.RegisterUser(message));
             gameHub.On<UserMessage>(nameof(IGameClient.DeleteUser),
                 message => gameClient.DeleteUser(message));
+            gameHub.On<List<UserMessage>>(nameof(IGameClient.ReckonUsers),
+                message => gameClient.ReckonUsers(message));
 
             gameHub.On<ChatMessage>(nameof(IGameClient.ReceiveChat),
                 message => gameClient.ReceiveChat(message));

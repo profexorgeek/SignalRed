@@ -5,14 +5,12 @@ namespace SignalRed.Client;
 
 class Program
 {
-    static IGameClient client = new ConsoleGameClient();
-
     static async Task Main(string[] args)
     {
         var uri = new Uri("http://localhost:5000");
         var rand = new Random();
 
-        var gameClient = new ConsoleGameClient();
+        var gameClient = new TestGameClient();
         await gameClient.Test();
 
         while (true)
@@ -26,7 +24,6 @@ class Program
                 }
             }
         }
-        await SRClient.Instance.Disconnect();
     }
 }
 

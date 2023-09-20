@@ -43,13 +43,10 @@ namespace SignalRed.Common.Hubs
             }            
             await Clients.All.RegisterUser(message);
         }
-        public async Task RequestAllUsers()
+        public async Task ReckonUsers()
         {
             CleanUserList();
-            foreach(var user in users)
-            {
-                await Clients.Caller.RegisterUser(user);
-            }
+            await Clients.Caller.ReckonUsers(users);
         }
         public async Task DeleteUser(UserMessage message)
         {
@@ -66,6 +63,8 @@ namespace SignalRed.Common.Hubs
                 users.Remove(existing);
 
                 // TODO: force disconnect?
+
+                await Clients.All.DeleteUser(message);
             }
         }
 
@@ -92,8 +91,8 @@ namespace SignalRed.Common.Hubs
 
         public async Task CreateEntity(EntityMessage message)
         {
-            if (string.IsNullOrWhiteSpace(message.EntityId)) return;
-            var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(message.Id)) return;
+            var existing = entities.Where(e => e.Id == message.Id).FirstOrDefault();
             if(existing == null)
             {
                 entities.Add(message);
@@ -102,8 +101,8 @@ namespace SignalRed.Common.Hubs
         }
         public async Task UpdateEntity(EntityMessage message)
         {
-            if (string.IsNullOrWhiteSpace(message.EntityId)) return;
-            var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(message.Id)) return;
+            var existing = entities.Where(e => e.Id == message.Id).FirstOrDefault();
             if(existing != null)
             {
                 entities.Remove(existing);
@@ -114,8 +113,8 @@ namespace SignalRed.Common.Hubs
         }
         public async Task DeleteEntity(EntityMessage message)
         {
-            if (string.IsNullOrWhiteSpace(message.EntityId)) return;
-            var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(message.Id)) return;
+            var existing = entities.Where(e => e.Id == message.Id).FirstOrDefault();
             if(existing != null)
             {
                 entities.Remove(existing);
@@ -153,7 +152,7 @@ namespace SignalRed.Common.Hubs
             for(var i = entities.Count - 1; i > -1; i--)
             {
                 var entity = entities[i];
-                if(users.Any(u => u.ClientId == entity.OwnerId) == false)
+                if(users.Any(u => u.ClientId == entity.Owner) == false)
                 {
                     entities.RemoveAt(i);
                 }

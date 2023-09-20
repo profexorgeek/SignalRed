@@ -14,19 +14,32 @@ namespace SignalRed.Common.Messages
 
     public class EntityMessage
     {
-        public string OwnerId { get; set; }
-        public string EntityId { get; set; }
-        public string EntityType { get; set; }
-        public string Payload { get; private set; }
+        public string Id { get; set; }
+        public string Owner { get; set; }
+        public string PayloadType { get; set; }
+        public string Payload { get; set; }
 
         public void SetPayload<T>(T state)
         {
-            Payload = JsonSerializer.Serialize<T>(state);
+            Payload = JsonSerializer.Serialize(state);
+            PayloadType = typeof(T).FullName;
         }
 
         public T GetPayload<T>()
         {
-            return JsonSerializer.Deserialize<T>(Payload);
+            if(typeof(T).FullName == PayloadType)
+            {
+                return JsonSerializer.Deserialize<T>(Payload);
+            }
+            else
+            {
+                throw new Exception($"Tried to deserialize payload of type {PayloadType} as type {typeof(T).FullName}");
+            }
+        }
+
+        public override string ToString()
+        {
+            return $"{PayloadType} ID:{Id}";
         }
     }
 }

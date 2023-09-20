@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ConsoleGameClient.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SignalRed.Common\SignalRed.Common.csproj" />
   </ItemGroup>
 

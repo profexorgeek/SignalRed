@@ -30,6 +30,12 @@ namespace SignalRed.Common.Interfaces
         /// </summary>
         /// <param name="message">The user to remove</param>
         Task DeleteUser(UserMessage message);
+        /// <summary>
+        /// Called by the server when the client has asked for a list of
+        /// all current users.
+        /// </summary>
+        /// <param name="users">The server's list of users</param>
+        Task ReckonUsers(List<UserMessage> users);
 
 
         /// <summary>
@@ -61,6 +67,11 @@ namespace SignalRed.Common.Interfaces
         /// <param name="message">The entity to delete</param>
         /// <returns></returns>
         Task DeleteEntity(EntityMessage message);
+        /// <summary>
+        /// Called when client should force their local state to match
+        /// the state provided by the server
+        /// </summary>
+        /// <param name="entities"></param>
         Task ReckonEntities(List<EntityMessage> entities);
     }
 }
