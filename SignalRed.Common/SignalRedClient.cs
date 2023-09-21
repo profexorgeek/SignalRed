@@ -78,7 +78,7 @@ namespace SignalRed.Client
                 throw new Exception("Attempted to Connect without initializing SRClient service!");
             }
 
-            // first, break any existing connections
+            // first disconnect from anything we're already connected to!
             await Disconnect();
 
             // now build our hub connection
@@ -115,7 +115,7 @@ namespace SignalRed.Client
 
             await DeleteUser(new UserMessage(ClientId, user));
             await gameHub.StopAsync();
-
+            gameHub = null;
             Connected = false;
         }
 
