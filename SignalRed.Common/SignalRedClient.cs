@@ -3,6 +3,7 @@ using SignalRed.Common.Hubs;
 using SignalRed.Common.Interfaces;
 using SignalRed.Common.Messages;
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 
 namespace SignalRed.Client
@@ -14,16 +15,32 @@ namespace SignalRed.Client
     // implementing party and this client just dumbly allows any kind of well-formed
     // message?
 
-    public class SRClient
+    public delegate void SignalRedEvent<T>(T? message);
+    public delegate void SignalRedEvent();
+
+    public class SignalRedClient
     {
-        private static SRClient instance;
+        public event SignalRedEvent<Exception>? ConnectionClosed;
+        public event SignalRedEvent? ConnectionOpened;
+        public event SignalRedEvent<ScreenMessage>? ScreenTransitionReceived;
+        public event SignalRedEvent<UserMessage>? UserUpdateReceived;
+        public event SignalRedEvent<UserMessage>? UserDeleteReceived;
+        public event SignalRedEvent<List<UserMessage>>? UserReckonReceived;
+        public event SignalRedEvent<ChatMessage>? ChatReceived;
+        public event SignalRedEvent? ChatDeleteReceived;
+        public event SignalRedEvent<EntityMessage>? EntityCreateReceived;
+        public event SignalRedEvent<EntityMessage>? EntityUpdateReceived;
+        public event SignalRedEvent<EntityMessage>? EntityDeleteReceived;
+        public event SignalRedEvent<List<EntityMessage>>? EntityReckonReceived;
+        public event SignalRedEvent<GenericMessage>? GenericMessageReceived;
+
+        private static SignalRedClient instance;
         private HubConnection? gameHub;
         private bool initialized = false;
         private string user = "new user";
-        private IGameClient gameClient;
         private ulong localEntityIndex = 0;
 
-        public static SRClient Instance => instance ?? (instance = new SRClient());
+        public static SignalRedClient Instance => instance ?? (instance = new SignalRedClient());
         public string? ClientId => gameHub?.ConnectionId;
         public string CurrentScreen { get; private set; } = "";
         public bool Connected { get; private set; } = false;
@@ -33,10 +50,9 @@ namespace SignalRed.Client
         /// </summary>
         /// <param name="gameClient">The game client, usually the game engine, which
         /// must implement IGameClient</param>
-        public void Initialize(IGameClient _gameClient)
+        public void Initialize()
         {
             localEntityIndex = 0;
-            gameClient = _gameClient;
             initialized = true;
         }
 
@@ -75,11 +91,14 @@ namespace SignalRed.Client
 
             // form the connection
             await gameHub.StartAsync();
+            Connected = true;
 
+            // send our username
             user = username;
             await UpdateUser(new UserMessage(ClientId, user));
 
-            Connected = true;
+            // fire the successful connection event
+            ConnectionOpened?.Invoke();
         }
         public async Task Connect(string url, string username)
         {
@@ -211,6 +230,23 @@ namespace SignalRed.Client
         }
 
         /// <summary>
+        /// Sends a generic message to all clients. Used to send one-off messages that fall
+        /// outside of existing patterns.
+        /// </summary>
+        /// <param name="key">The message key</param>
+        /// <param name="value">The message value</param>
+        public async Task SendGenericMessage(string key, string value)
+        {
+            var msg = new GenericMessage()
+            {
+                ClientId = ClientId,
+                MessageKey = key,
+                MessageValue = value,
+            };
+            await TryInvoke(nameof(GameHub.SendGenericMessage), msg);
+        }
+
+        /// <summary>
         /// Attempts to invoke the provided method name on the hub.
         /// 
         /// Overloads for a message argument or no argument.
@@ -228,7 +264,7 @@ namespace SignalRed.Client
             await gameHub.InvokeAsync(methodName);
             return true;
         }
-        
+
         /// <summary>
         /// Registers all of the handlers for various message types the
         /// hub can handle
@@ -241,32 +277,38 @@ namespace SignalRed.Client
                 return;
             }
 
-            gameHub.Closed += (exception) => gameClient.FailConnection(exception);
+            gameHub.Closed += (exception) => {
+                ConnectionClosed?.Invoke(exception);
+                return Task.CompletedTask;
+            };
 
             gameHub.On<ScreenMessage>(nameof(IGameClient.MoveToScreen),
-                message => gameClient.MoveToScreen(message));
+                message => ScreenTransitionReceived?.Invoke(message));
 
             gameHub.On<UserMessage>(nameof(IGameClient.RegisterUser),
-                message => gameClient.RegisterUser(message));
+                message => UserUpdateReceived?.Invoke(message));
             gameHub.On<UserMessage>(nameof(IGameClient.DeleteUser),
-                message => gameClient.DeleteUser(message));
+                message => UserDeleteReceived?.Invoke(message));
             gameHub.On<List<UserMessage>>(nameof(IGameClient.ReckonUsers),
-                message => gameClient.ReckonUsers(message));
+                message => UserReckonReceived?.Invoke(message));
 
             gameHub.On<ChatMessage>(nameof(IGameClient.ReceiveChat),
-                message => gameClient.ReceiveChat(message));
+                message => ChatReceived?.Invoke(message));
             gameHub.On(nameof(IGameClient.DeleteAllChats),
-                () => gameClient.DeleteAllChats());
+                () => ChatDeleteReceived?.Invoke());
 
             gameHub.On<EntityMessage>(nameof(IGameClient.CreateEntity),
-                message => gameClient.CreateEntity(message));
+                message => EntityCreateReceived?.Invoke(message));
             gameHub.On<EntityMessage>(nameof(IGameClient.UpdateEntity),
-                message => gameClient.UpdateEntity(message));
+                message => EntityUpdateReceived?.Invoke(message));
             gameHub.On<EntityMessage>(nameof(IGameClient.DeleteEntity),
-                message => gameClient.DeleteEntity(message));
+                message => EntityDeleteReceived?.Invoke(message));
             gameHub.On<List<EntityMessage>>(nameof(IGameClient.ReckonEntities),
-                message => gameClient.ReckonEntities(message));
-            
+                message => EntityReckonReceived?.Invoke(message));
+
+            gameHub.On<GenericMessage>(nameof(IGameClient.ReceiveGeneric),
+                message => GenericMessageReceived?.Invoke(message));
+
         }
     }
 }

@@ -14,8 +14,8 @@ namespace SignalRed.Common.Messages
 
     public class EntityMessage
     {
-        public string Id { get; set; }
-        public string Owner { get; set; }
+        public string EntityId { get; set; }
+        public string ClientId { get; set; }
         public string PayloadType { get; set; }
         public string Payload { get; set; }
 
@@ -39,7 +39,7 @@ namespace SignalRed.Common.Messages
 
         public override string ToString()
         {
-            return $"{PayloadType} ID:{Id}";
+            return $"{PayloadType} ID:{EntityId}";
         }
     }
 }

@@ -1,4 +1,4 @@
 using SignalRed.Common;
 
-SRServer.Instance.Initialize();
-await SRServer.Instance.RunAsync(5000);
+SignalRedServer.Instance.Initialize();
+await SignalRedServer.Instance.RunAsync(5000);

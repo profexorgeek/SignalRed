@@ -3,6 +3,11 @@ using System.Text.Json;
 
 namespace SignalRed.Common.Interfaces
 {
+    /// <summary>
+    /// This interface is not implemented. It simply defines the contract of things
+    /// a game client can handle. The SignalRedClient lists for the server to call
+    /// these methods and maps them to events that can be handled in the game client.
+    /// </summary>
     public interface IGameClient
     {
         /// <summary>
@@ -73,5 +78,11 @@ namespace SignalRed.Common.Interfaces
         /// </summary>
         /// <param name="entities"></param>
         Task ReckonEntities(List<EntityMessage> entities);
+
+        /// <summary>
+        /// Called when client should receive a generic message
+        /// </summary>
+        /// <param name="message">The generic message, a key,value pair</param>
+        Task ReceiveGeneric(GenericMessage message);
     }
 }

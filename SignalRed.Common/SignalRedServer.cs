@@ -3,13 +3,13 @@ using SignalRed.Common.Interfaces;
 
 namespace SignalRed.Common
 {
-    public class SRServer
+    public class SignalRedServer
     {
-        private static SRServer instance;
+        private static SignalRedServer instance;
         private bool initialized = false;
         WebApplication? server;
 
-        public static SRServer Instance => instance ?? (instance = new SRServer());
+        public static SignalRedServer Instance => instance ?? (instance = new SignalRedServer());
 
         /// <summary>
         /// Initialization method, must be called before attempting to use the service
