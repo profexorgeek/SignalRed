@@ -234,7 +234,7 @@ namespace SignalRed.Client
         public async Task RegisterEntity<T>(T initialState)
         {
             var entityId = GetUniqueEntityId();
-            var msg = new EntityStateMessage(ClientId, ConnectionId, entityId);
+            var msg = new EntityStateMessage(ClientId, ConnectionId, entityId, ClientId);
             msg.SetState(initialState);
             await TryInvoke(nameof(GameHub.RegisterEntity), msg);
         }
@@ -248,7 +248,7 @@ namespace SignalRed.Client
         /// <returns></returns>
         public async Task UpdateEntity<T>(T entity) where T : INetworkEntity
         {
-            var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId);
+            var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId, entity.OwnerClientId);
             msg.SetState(entity.GetState<T>());
             await TryInvoke(nameof(GameHub.UpdateEntity), msg);
         }
@@ -262,7 +262,7 @@ namespace SignalRed.Client
         /// <returns></returns>
         public async Task DeleteEntity<T>(T entity) where T : INetworkEntity
         {
-            var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId);
+            var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId, entity.OwnerClientId);
             msg.SetState(entity.GetState<T>());
             await TryInvoke(nameof(GameHub.DeleteEntity), msg);
         }

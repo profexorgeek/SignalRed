@@ -7,9 +7,9 @@ namespace SignalRed.Common.Messages
         public string SenderClientId { get; set; }
         public string SenderConnectionId { get; set; }
 
-        public ConnectionMessage(string senderId, string senderConnectionId)
+        public ConnectionMessage(string senderClientId, string senderConnectionId)
         {
-            SenderClientId = senderId;
+            SenderClientId = senderClientId;
             SenderConnectionId = senderConnectionId;
         }
     }

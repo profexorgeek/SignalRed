@@ -28,7 +28,7 @@ namespace SignalRed.Common.Messages
         /// <summary>
         /// The unique ID (client ID, not connection ID) of the client that created this entity
         /// </summary>
-        public string OwnerId { get; set; }
+        public string OwnerClientId { get; set; }
 
         /// <summary>
         /// The full type name of the payload. This should usually
@@ -46,11 +46,12 @@ namespace SignalRed.Common.Messages
         public string? SerializedState { get; set; }
 
         
-        public EntityStateMessage(string senderId, string connectionId, string targetId)
+        public EntityStateMessage(string senderClientId, string connectionId, string enitityId, string ownerClientId)
         {
-            SenderClientId = senderId;
+            SenderClientId = senderClientId;
             SenderConnectionId = connectionId;
-            EntityId = targetId;
+            EntityId = enitityId;
+            OwnerClientId = ownerClientId;
         }
         
         /// <summary>

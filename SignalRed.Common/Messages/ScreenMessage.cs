@@ -12,8 +12,10 @@ namespace SignalRed.Common.Messages
         /// </summary>
         public string TargetScreen { get; set; }
 
-        public ScreenMessage(string clientId, string connectionId, string targetScreen)
+        public ScreenMessage(string senderClientId, string connectionId, string targetScreen)
         {
+            SenderClientId = senderClientId;
+            SenderConnectionId = connectionId;
             TargetScreen = targetScreen;
         }
     }
