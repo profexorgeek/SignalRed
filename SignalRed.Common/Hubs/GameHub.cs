@@ -10,21 +10,101 @@ namespace SignalRed.Common.Hubs
 {
     public class GameHub : Hub<IGameClient>
     {
-        static List<ChatMessage> messages = new List<ChatMessage>();
-        static List<EntityMessage> entities = new List<EntityMessage>();
-        static List<UserMessage> users = new List<UserMessage>();
-        static ScreenMessage currentScreen = new ScreenMessage();
+        static List<ConnectionMessage> connections = new List<ConnectionMessage>();
+        static List<PayloadMessage> payloads = new List<PayloadMessage>();
+        static ScreenMessage currentScreen = new ScreenMessage("None");
 
+        /// <summary>
+        /// Called by a client when it wants all clients to move
+        /// to the target screen.
+        /// </summary>
+        /// <param name="message">A message containing the target screen</param>
         public async Task MoveToScreen(ScreenMessage message)
         {
-            Console.WriteLine($"Received request to move to screen: {message.NewScreen}");
+            Console.WriteLine($"Received request to move to screen: {message.TargetScreen}");
             currentScreen = message;
             await Clients.All.MoveToScreen(message);
         }
+        
+        /// <summary>
+        /// Called by a client when it wants to know what screen it should be on
+        /// </summary>
+        /// <returns></returns>
         public async Task RequestCurrentScreen()
         {
             await Clients.Caller.MoveToScreen(currentScreen);
         }
+
+
+        /// <summary>
+        /// Called after connecting to associate a durable ClientId with
+        /// a transient ConnectionId
+        /// </summary>
+        /// <param name="message">The connection to register</param>
+        public async Task RegisterConnection(ConnectionMessage message)
+        {
+            var existing = connections.Where(c => c.SenderId == message.SenderId).FirstOrDefault();
+            
+            // we already knew about this client, update the connection ID in case this is a
+            // dropped client that has reconnected
+            if(existing != null)
+            {
+                existing.SenderConnectionId = message.SenderConnectionId;
+            }
+
+            // this is a new user
+            else
+            {
+                connections.Add(message);
+            }
+
+            await Clients.All.RegisterConnection(message);
+        }
+
+        /// <summary>
+        /// Called to fetch a fresh list of all valid connections
+        /// </summary>
+        public async Task FetchConnections()
+        {
+            CleanConnectionList();
+            var validConnections = connections.Where(c => c.SenderConnectionId != null).ToList();
+            await Clients.Caller.ReckonConnections(validConnections);
+        }
+
+        /// <summary>
+        /// Called to delete a connection, usually before a graceful disconnect.
+        /// </summary>
+        /// <param name="message">The connection to delete.</param>
+        public async Task DeleteConnection(ConnectionMessage message)
+        {
+            var existing = connections.Where(c => c.SenderConnectionId == message.SenderConnectionId).FirstOrDefault();
+            if(existing != null)
+            {
+                connections.Remove(existing);
+            }
+            await Clients.All.DeleteConnection(message);
+        }
+
+
+        /// <summary>
+        /// Called to broadcast a generic message.
+        /// </summary>
+        /// <param name="message">The generic message</param>
+        public async Task SendGenericMessage(GenericMessage message)
+        {
+            await Clients.All.ReceiveGenericMessage(message);
+        }
+
+
+        public async RegisterPayload(PayloadMessage message)
+        {
+            if(message.TargetId != null)
+            {
+
+            }
+        }
+
+
 
         public async Task UpdateUser(UserMessage message)
         {
@@ -88,20 +168,20 @@ namespace SignalRed.Common.Hubs
             await Clients.All.DeleteAllChats();
         }
 
-        public async Task CreateEntity(EntityMessage message)
+        public async Task CreateEntity(PayloadMessage message)
         {
-            if (string.IsNullOrWhiteSpace(message.EntityId)) return;
-            var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(message.TargetId)) return;
+            var existing = entities.Where(e => e.TargetId == message.TargetId).FirstOrDefault();
             if(existing == null)
             {
                 entities.Add(message);
                 await Clients.All.CreateEntity(message);
             }
         }
-        public async Task UpdateEntity(EntityMessage message)
+        public async Task UpdateEntity(PayloadMessage message)
         {
-            if (string.IsNullOrWhiteSpace(message.EntityId)) return;
-            var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(message.TargetId)) return;
+            var existing = entities.Where(e => e.TargetId == message.TargetId).FirstOrDefault();
             if(existing != null)
             {
                 entities.Remove(existing);
@@ -110,10 +190,10 @@ namespace SignalRed.Common.Hubs
                 await Clients.All.UpdateEntity(message);
             }
         }
-        public async Task DeleteEntity(EntityMessage message)
+        public async Task DeleteEntity(PayloadMessage message)
         {
-            if (string.IsNullOrWhiteSpace(message.EntityId)) return;
-            var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(message.TargetId)) return;
+            var existing = entities.Where(e => e.TargetId == message.TargetId).FirstOrDefault();
             if(existing != null)
             {
                 entities.Remove(existing);
@@ -130,23 +210,26 @@ namespace SignalRed.Common.Hubs
 
         public async Task SendGenericMessage(GenericMessage message)
         {
-            await Clients.All.ReceiveGeneric(message);
+            await Clients.All.ReceiveGenericMessage(message);
         }
 
         /// <summary>
         /// Cleans the user list, removing any users that aren't found
         /// in the connected clients
         /// </summary>
-        void CleanUserList()
+        void CleanConnectionList()
         {
-            for (var i = users.Count - 1; i > -1; i--)
+            // TODO: remove long-dead connections from the list
+
+            for (var i = connections.Count - 1; i > -1; i--)
             {
-                if (Clients.Client(users[i].ClientId) == null)
+                if (Clients.Client(connections[i].SenderConnectionId) == null)
                 {
-                    users.RemoveAt(i);
+                    connections[i].SenderConnectionId = null;
                 }
             }
         }
+
         /// <summary>
         /// Removes any entities that don't have owners, purging entities owned
         /// by disconnected users.

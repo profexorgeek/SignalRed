@@ -24,17 +24,35 @@ namespace SignalRed.Common.Interfaces
         /// <param name="screenName">The target screen to move to</param>
         Task MoveToScreen(ScreenMessage message);
 
+
         /// <summary>
         /// Called when a new user joins the server or a user changes their name
         /// </summary>
         /// <param name="username">The new username</param>
-        Task RegisterUser(UserMessage message);
+        Task RegisterConnection(ConnectionMessage message);
+
         /// <summary>
-        /// Called by the server when an existing user is deleted. Usually called before
+        /// Called by the server when the client should reckon its
+        /// list of connections with the master list from the server.
+        /// </summary>
+        /// <param name="message">A list of connections</param>
+        Task ReckonConnections(List<ConnectionMessage> message);
+
+        /// <summary>
+        /// Called by the server when an existing connection is deleted. Usually called before
         /// disconnecting to gracefully disconnect.
         /// </summary>
-        /// <param name="message">The user to remove</param>
-        Task DeleteUser(UserMessage message);
+        /// <param name="message">The connection to remove</param>
+        Task DeleteConnection(ConnectionMessage message);
+
+
+        /// <summary>
+        /// Called when client should receive a generic message
+        /// </summary>
+        /// <param name="message">The generic message, a key,value pair</param>
+        Task ReceiveGenericMessage(GenericMessage message);
+
+
         /// <summary>
         /// Called by the server when the client has asked for a list of
         /// all current users.
@@ -57,7 +75,7 @@ namespace SignalRed.Common.Interfaces
         /// Called by the server when an entity is created
         /// </summary>
         /// <param name="message">The entity to create</param>
-        Task CreateEntity(EntityMessage message);
+        Task CreateEntity(PayloadMessage message);
         /// <summary>
         /// Called by the server when an entity is updated. If this
         /// is a reckoning message, the client should force the incoming state
@@ -65,24 +83,20 @@ namespace SignalRed.Common.Interfaces
         /// </summary>
         /// <param name="message">The entity to update</param>
         /// <param name="reckoning">If this is a reckoning message</param>
-        Task UpdateEntity(EntityMessage message);
+        Task UpdateEntity(PayloadMessage message);
         /// <summary>
         /// Called by the server when an entity is deleted
         /// </summary>
         /// <param name="message">The entity to delete</param>
         /// <returns></returns>
-        Task DeleteEntity(EntityMessage message);
+        Task DeleteEntity(PayloadMessage message);
         /// <summary>
         /// Called when client should force their local state to match
         /// the state provided by the server
         /// </summary>
         /// <param name="entities"></param>
-        Task ReckonEntities(List<EntityMessage> entities);
+        Task ReckonEntities(List<PayloadMessage> entities);
 
-        /// <summary>
-        /// Called when client should receive a generic message
-        /// </summary>
-        /// <param name="message">The generic message, a key,value pair</param>
-        Task ReceiveGeneric(GenericMessage message);
+        
     }
 }

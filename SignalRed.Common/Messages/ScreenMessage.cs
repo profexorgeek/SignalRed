@@ -1,14 +1,20 @@
-﻿namespace SignalRed.Common.Messages
+﻿using SignalRed.Common.Interfaces;
+
+namespace SignalRed.Common.Messages
 {
-    public class ScreenMessage
+    public class ScreenMessage : INetworkMessage
     {
-        public string NewScreen { get; set; }
+        public string? SenderId { get; set; }
+        public string? SenderConnectionId { get; set; }
 
-        public ScreenMessage() { }
+        /// <summary>
+        /// The target screen that all clients should transition to
+        /// </summary>
+        public string TargetScreen { get; set; }
 
-        public ScreenMessage(string newScreen)
+        public ScreenMessage(string targetScreen)
         {
-            NewScreen = newScreen;
+            TargetScreen = targetScreen;
         }
     }
 }
