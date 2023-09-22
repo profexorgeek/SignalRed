@@ -2,9 +2,6 @@
 using SignalRed.Common.Hubs;
 using SignalRed.Common.Interfaces;
 using SignalRed.Common.Messages;
-using System.Diagnostics;
-using System.Globalization;
-using System.Net;
 
 namespace SignalRed.Client
 {
@@ -132,10 +129,10 @@ namespace SignalRed.Client
         /// include the protocol (http) and port number
         /// </summary>
         /// <param name="url">The url to connect to, including protocol and port number</param>
-        public async Task Connect(string url, string username)
+        public async Task Connect(string url)
         {
             var uri = new Uri(url);
-            await Connect(uri, username);
+            await Connect(uri);
         }
         public async Task Connect(Uri url)
         {
@@ -153,6 +150,7 @@ namespace SignalRed.Client
                 .WithUrl(gameHubUrl)
                 .Build();
 
+            // register our incoming message handlers
             RegisterHubHandlers();
 
             // form the connection
@@ -163,9 +161,6 @@ namespace SignalRed.Client
             // with the server
             await TryInvoke(nameof(GameHub.RegisterConnection), 
                 new ConnectionMessage(this.ClientId, this.ConnectionId));
-
-            // register events when server messages are received
-            RegisterHubHandlers();
 
             // fire the successful connection event
             ConnectionOpened?.Invoke();
@@ -249,8 +244,9 @@ namespace SignalRed.Client
         public async Task UpdateEntity<T>(T entity) where T : INetworkEntity
         {
             var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId, entity.OwnerClientId);
-            msg.SetState(entity.GetState<T>());
-            await TryInvoke(nameof(GameHub.UpdateEntity), msg);
+            var state = entity.GetState();
+            msg.SetState(state);
+            await TryInvoke<EntityStateMessage>(nameof(GameHub.UpdateEntity), msg);
         }
 
         /// <summary>
@@ -263,8 +259,9 @@ namespace SignalRed.Client
         public async Task DeleteEntity<T>(T entity) where T : INetworkEntity
         {
             var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId, entity.OwnerClientId);
-            msg.SetState(entity.GetState<T>());
-            await TryInvoke(nameof(GameHub.DeleteEntity), msg);
+            var state = entity.GetState();
+            msg.SetState(state);
+            await TryInvoke<EntityStateMessage>(nameof(GameHub.DeleteEntity), msg);
         }
 
         /// <summary>

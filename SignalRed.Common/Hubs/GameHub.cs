@@ -16,7 +16,7 @@ namespace SignalRed.Common.Hubs
     {
         static List<ConnectionMessage> connections = new List<ConnectionMessage>();
         static List<EntityStateMessage> entityStates = new List<EntityStateMessage>();
-        static ScreenMessage currentScreen = new ScreenMessage("None");
+        static ScreenMessage currentScreen = new ScreenMessage("", "", "None");
 
         /// <summary>
         /// Called by a client when it wants all clients to move
@@ -38,6 +38,7 @@ namespace SignalRed.Common.Hubs
         {
             await Clients.Caller.MoveToScreen(currentScreen);
         }
+
 
 
         /// <summary>
@@ -62,6 +63,7 @@ namespace SignalRed.Common.Hubs
                 connections.Add(message);
             }
 
+            Console.WriteLine($"Connection received: {message.SenderClientId}:{message.SenderConnectionId}");
             await Clients.All.RegisterConnection(message);
         }
 
@@ -76,6 +78,7 @@ namespace SignalRed.Common.Hubs
             {
                 connections.Remove(existing);
             }
+            Console.WriteLine($"Connection removed: {message.SenderClientId}:{message.SenderConnectionId}");
             await Clients.All.DeleteConnection(message);
         }
 
@@ -90,15 +93,16 @@ namespace SignalRed.Common.Hubs
         }
 
 
+
         /// <summary>
         /// Called to broadcast a generic message.
         /// </summary>
         /// <param name="message">The generic message</param>
         public async Task SendGenericMessage(GenericMessage message)
         {
+            Console.WriteLine($"Generic received: {message.MessageKey}:{message.MessageValue}");
             await Clients.All.ReceiveGenericMessage(message);
         }
-
 
         /// <summary>
         /// Registers or updates an entity state using EntityId as the unique key. This
@@ -125,6 +129,7 @@ namespace SignalRed.Common.Hubs
                 }
                 entityStates.Add(message);
             }
+            Console.WriteLine($"Registered entity: {message.StateType}:{message.EntityId}");
             await Clients.All.RegisterEntity(message);
         }
 
@@ -140,7 +145,7 @@ namespace SignalRed.Common.Hubs
         /// GenericMessage instead.
         /// </summary>
         /// <param name="message">The payload to be updated</param>
-        public async Task UpdateEntity(EntityStateMessage message)
+        public async Task UpdateEntity(EntityStateMessage? message)
         {
             if (!string.IsNullOrWhiteSpace(message.EntityId))
             {
@@ -160,7 +165,7 @@ namespace SignalRed.Common.Hubs
         /// </summary>
         /// <param name="message"></param>
         /// <returns></returns>
-        public async Task DeleteEntity(EntityStateMessage message)
+        public async Task DeleteEntity(EntityStateMessage? message)
         {
             if(!string.IsNullOrWhiteSpace(message.EntityId))
             {
@@ -170,14 +175,20 @@ namespace SignalRed.Common.Hubs
                     entityStates.Remove(existing);
                 }
             }
+            Console.WriteLine($"Deleted entity: {message.StateType}:{message.EntityId}");
             await Clients.All.DeleteEntity(message);
         }
 
+        /// <summary>
+        /// Sends list of all entity states to the requesting client
+        /// </summary>
+        /// <returns></returns>
         public async Task ReckonEntities()
         {
             CleanEntityStateList();
             await Clients.Caller.ReckonEntities(entityStates);
         }
+
 
 
         /// <summary>
@@ -206,7 +217,7 @@ namespace SignalRed.Common.Hubs
             for (var i = entityStates.Count - 1; i > -1; i--)
             {
                 var entity = entityStates[i];
-                if (connections.Any(u => u.SenderClientId == entity.OwnerId) == false)
+                if (connections.Any(u => u.SenderClientId == entity.OwnerClientId) == false)
                 {
                     entityStates.RemoveAt(i);
                 }

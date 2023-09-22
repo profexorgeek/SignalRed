@@ -12,6 +12,12 @@ namespace SignalRed.Common.Messages
         /// </summary>
         public string TargetScreen { get; set; }
 
+        /// <summary>
+        /// This empty constructor shouldn't be called but must exist so
+        /// System.Text.Json can properly serialize/deserialize this object!
+        /// </summary>
+        public ScreenMessage() { }
+
         public ScreenMessage(string senderClientId, string connectionId, string targetScreen)
         {
             SenderClientId = senderClientId;

@@ -10,6 +10,12 @@ namespace SignalRed.Common.Messages
         public string MessageKey { get; set; }
         public string MessageValue { get; set; }
 
+        /// <summary>
+        /// This empty constructor shouldn't be called but must exist so
+        /// System.Text.Json can properly serialize/deserialize this object!
+        /// </summary>
+        public GenericMessage() { }
+
         public GenericMessage(string senderClientId, string senderConnectionId, string messageKey, string messageValue)
         {
             SenderClientId = senderClientId;

@@ -7,9 +7,9 @@ namespace SignalRed.Common.Interfaces
 
         public string EntityId { get; set; }
 
-        T GetState<T>();
+        object GetState();
 
-        void ApplyState<T>(T networkState);
+        void ApplyState(object networkState);
 
         void Destroy();
     }

@@ -45,15 +45,20 @@ namespace SignalRed.Common.Messages
         /// </summary>
         public string? SerializedState { get; set; }
 
-        
-        public EntityStateMessage(string senderClientId, string connectionId, string enitityId, string ownerClientId)
+        /// <summary>
+        /// This empty constructor shouldn't be called but must exist so
+        /// System.Text.Json can properly serialize/deserialize this object!
+        /// </summary>
+        public EntityStateMessage() { }
+
+        public EntityStateMessage(string senderClientId, string senderConnectionId, string enitityId, string ownerClientId)
         {
             SenderClientId = senderClientId;
-            SenderConnectionId = connectionId;
+            SenderConnectionId = senderConnectionId;
             EntityId = enitityId;
             OwnerClientId = ownerClientId;
         }
-        
+
         /// <summary>
         /// Sets the Payload and PayloadType property by serializing 
         /// the provided state.
@@ -63,7 +68,7 @@ namespace SignalRed.Common.Messages
         public void SetState<T>(T state)
         {
             SerializedState = JsonSerializer.Serialize(state);
-            StateType = typeof(T).FullName;
+            StateType = state?.GetType().FullName ?? "Null";
         }
 
         /// <summary>
@@ -76,7 +81,7 @@ namespace SignalRed.Common.Messages
         /// does not match PayloadType</exception>
         public T GetState<T>()
         {
-            if(typeof(T).FullName == StateType)
+            if (typeof(T).FullName == StateType)
             {
                 return JsonSerializer.Deserialize<T>(SerializedState);
             }
@@ -84,15 +89,6 @@ namespace SignalRed.Common.Messages
             {
                 throw new Exception($"Tried to deserialize payload of type {StateType} as type {typeof(T).FullName}");
             }
-        }
-
-        /// <summary>
-        /// Gets a string representation of this message, usually
-        /// used for debugging.
-        /// </summary>
-        public override string ToString()
-        {
-            return $"{EntityId}({StateType})";
         }
     }
 }
