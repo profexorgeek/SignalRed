@@ -6,7 +6,7 @@ namespace SignalRed.Common.Interfaces
         /// The unique identifier of the sender, persistent
         /// across connection/disconnection events.
         /// </summary>
-        public string SenderId { get; }
+        public string SenderClientId { get; }
 
         /// <summary>
         /// The connection identifier used by the server to 

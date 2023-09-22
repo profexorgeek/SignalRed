@@ -20,26 +20,73 @@ namespace SignalRed.Client
 
     public class SignalRedClient
     {
-        public event SignalRedEvent<Exception>? ConnectionClosed;
-        public event SignalRedEvent? ConnectionOpened;
-        public event SignalRedEvent<ScreenMessage>? ScreenTransitionReceived;
-        public event SignalRedEvent<UserMessage>? UserUpdateReceived;
-        public event SignalRedEvent<UserMessage>? UserDeleteReceived;
-        public event SignalRedEvent<List<UserMessage>>? UserReckonReceived;
-        public event SignalRedEvent<ChatMessage>? ChatReceived;
-        public event SignalRedEvent? ChatDeleteReceived;
-        public event SignalRedEvent<PayloadMessage>? EntityCreateReceived;
-        public event SignalRedEvent<PayloadMessage>? EntityUpdateReceived;
-        public event SignalRedEvent<PayloadMessage>? EntityDeleteReceived;
-        public event SignalRedEvent<List<PayloadMessage>>? EntityReckonReceived;
-        public event SignalRedEvent<GenericMessage>? GenericMessageReceived;
-
         private static SignalRedClient instance;
         private HubConnection? gameHub;
         private bool initialized = false;
         private string user = "new user";
         private ulong localEntityIndex = 0;
         private string clientId;
+
+        /// <summary>
+        /// An event fired when the connection to the server is closed
+        /// </summary>
+        public event SignalRedEvent<Exception>? ConnectionClosed;
+
+        /// <summary>
+        /// An event fired when the connection to the server is opened
+        /// </summary>
+        public event SignalRedEvent? ConnectionOpened;
+
+        /// <summary>
+        /// An event fired when a connection should be added or updated
+        /// </summary>
+        public event SignalRedEvent<ConnectionMessage>? ConnectionUpdateReceived;
+
+        /// <summary>
+        /// An event fired when a connection should be deleted
+        /// </summary>
+        public event SignalRedEvent<ConnectionMessage>? ConnectionDeleteReceived;
+
+        /// <summary>
+        /// An event fired when the local list of connections should be reckoned against
+        /// the server's list
+        /// </summary>
+        public event SignalRedEvent<List<ConnectionMessage>>? ConnectionReckonReceived;
+
+        /// <summary>
+        /// An event fired when the client should transition to a new screen
+        /// </summary>
+        public event SignalRedEvent<ScreenMessage>? ScreenTransitionReceived;
+
+        /// <summary>
+        /// An event fired when the client should create an entity
+        /// </summary>
+        public event SignalRedEvent<EntityStateMessage>? EntityCreateReceived;
+
+        /// <summary>
+        /// An event fired when the client should update an entity
+        /// </summary>
+        public event SignalRedEvent<EntityStateMessage>? EntityUpdateReceived;
+
+        /// <summary>
+        /// An event fired when the client should delete an entity
+        /// </summary>
+        public event SignalRedEvent<EntityStateMessage>? EntityDeleteReceived;
+
+        /// <summary>
+        /// An event fired when the client should reckon its local entities with the list
+        /// from the server
+        /// </summary>
+        public event SignalRedEvent<List<EntityStateMessage>>? EntityReckonReceived;
+
+        /// <summary>
+        /// An event fired when a generic message is received
+        /// </summary>
+        public event SignalRedEvent<GenericMessage>? GenericMessageReceived;
+
+        
+
+
 
         /// <summary>
         /// The singleton instance of this service.
@@ -64,6 +111,8 @@ namespace SignalRed.Client
         /// </summary>
         public bool Connected { get; private set; } = false;
 
+
+
         /// <summary>
         /// Initializes the client service
         /// </summary>
@@ -78,12 +127,13 @@ namespace SignalRed.Client
 
         /// <summary>
         /// Used to get a unique entity ID when creating
-        /// a new entity
+        /// a new entity. The ID is a combination of the 
+        /// ClientId and an incrementing integer
         /// </summary>
         public string GetUniqueEntityId()
         {
             localEntityIndex++;
-            return $"{ConnectionId}_{localEntityIndex}";
+            return $"{ClientId}_{localEntityIndex}";
         }
 
 
@@ -92,7 +142,12 @@ namespace SignalRed.Client
         /// include the protocol (http) and port number
         /// </summary>
         /// <param name="url">The url to connect to, including protocol and port number</param>
-        public async Task Connect(Uri url, string username)
+        public async Task Connect(string url, string username)
+        {
+            var uri = new Uri(url);
+            await Connect(uri, username);
+        }
+        public async Task Connect(Uri url)
         {
             if (!initialized)
             {
@@ -114,19 +169,18 @@ namespace SignalRed.Client
             await gameHub.StartAsync();
             Connected = true;
 
-            // send our username
-            user = username;
-            await UpdateUser(new UserMessage(ConnectionId, user));
+            // regiser our unique clientId against our connection ID
+            // with the server
+            await TryInvoke(nameof(GameHub.RegisterConnection), 
+                new ConnectionMessage(this.ClientId, this.ConnectionId));
+
+            // register events when server messages are received
+            RegisterHubHandlers();
 
             // fire the successful connection event
             ConnectionOpened?.Invoke();
         }
-        public async Task Connect(string url, string username)
-        {
-            var uri = new Uri(url);
-            await Connect(uri, username);
-        }
-        
+
         /// <summary>
         /// Disconnects from the server if a connection is active
         /// </summary>
@@ -135,11 +189,14 @@ namespace SignalRed.Client
         {
             if (!initialized || !Connected || gameHub == null) return;
 
-            await DeleteUser(new UserMessage(ConnectionId, user));
+            await TryInvoke(nameof(GameHub.DeleteConnection),
+                new ConnectionMessage(ClientId, ConnectionId));
+
             await gameHub.StopAsync();
             gameHub = null;
             Connected = false;
         }
+
 
 
         /// <summary>
@@ -148,9 +205,10 @@ namespace SignalRed.Client
         /// <param name="screenName">The name of the screen to transition to</param>
         public async Task RequestScreenTransition(string screenName)
         {
-            await TryInvoke(nameof(GameHub.MoveToScreen), new ScreenMessage(screenName));
+            var msg = new ScreenMessage(ClientId, ConnectionId, screenName);
+            await TryInvoke(nameof(GameHub.MoveToScreen), msg);
         }
-        
+
         /// <summary>
         /// Requests that the server re-sends a move-to-screen event
         /// to this client, which will trigger a screen change on the IGameClient
@@ -161,98 +219,6 @@ namespace SignalRed.Client
         }
 
 
-        /// <summary>
-        /// Requests that the server resend each joined member (which will include
-        /// this client). Usually called when first joining a server.
-        /// </summary>
-        public async Task ReckonUsers()
-        {
-            await TryInvoke(nameof(GameHub.ReckonUsers));
-        }
-        /// <summary>
-        /// Updates the provided user. The server will register the user if they
-        /// are new, otherwise it will update the username associated with the
-        /// connected client if it has changed.
-        /// </summary>
-        /// <param name="message">The UserMessage with user details</param>
-        public async Task UpdateUser(UserMessage message)
-        {
-            await TryInvoke<UserMessage>(nameof(GameHub.UpdateUser), message);
-        }
-        /// <summary>
-        /// Sends a request to delete the provided user.
-        /// </summary>
-        /// <param name="message">The user to delete</param>
-        public async Task DeleteUser(UserMessage message)
-        {
-            await TryInvoke<UserMessage>(nameof(GameHub.DeleteUser), message);
-        }
-
-        /// <summary>
-        /// Sends a chat message to all players on the server.
-        /// </summary>
-        /// <param name="message">The message string</param>
-        public async Task SendChat(string chat)
-        {
-            var message = new ChatMessage(
-                ConnectionId,
-                user,
-                chat);
-            await TryInvoke<ChatMessage>(nameof(GameHub.SendChat), message);
-        }
-        /// <summary>
-        /// Requests that the server resend all chat messages. Usually called
-        /// when first joining or when a complete refresh is needed.
-        /// </summary>
-        public async Task RequestAllChats()
-        {
-            await TryInvoke(nameof(GameHub.RequestAllChats));
-        }
-        /// <summary>
-        /// Requests that the server delete chat message history. Useful when starting a new
-        /// lobby or new game to clear old chat messages.
-        /// </summary>
-        public async Task DeleteAllChats()
-        {
-            await TryInvoke(nameof(GameHub.DeleteAllChats));
-        }
-
-        /// <summary>
-        /// Sends a request for an entity to be created, which will
-        /// bounce back to the IGameClient when the server echoes it
-        /// back to all clients
-        /// </summary>
-        /// <param name="message">The entity creation message</param>
-        public async Task RequestCreateEntity(PayloadMessage message)
-        {
-            await TryInvoke(nameof(GameHub.CreateEntity), message);
-        }
-        /// <summary>
-        /// Sends a request to update an entity, which will bounce back
-        /// to the IGameClient when the server echoes it to all clients
-        /// </summary>
-        /// <param name="message">The entity to update</param>
-        public async Task RequestUpdateEntity(PayloadMessage message)
-        {
-            await TryInvoke(nameof(GameHub.UpdateEntity), message);
-        }
-        /// <summary>
-        /// Sends a request to delete an entity, which will bounce back to the
-        /// IGameClient when the server echoes the message to all clients
-        /// </summary>
-        /// <param name="message">The entity to delete</param>
-        public async Task RequestDeleteEntity(PayloadMessage message)
-        {
-            await TryInvoke(nameof(GameHub.UpdateEntity), message);
-        }
-        /// <summary>
-        /// Sends a request to the server to provide a reckoning message that
-        /// contains all entities
-        /// </summary>
-        public async Task ReckonEntities()
-        {
-            await TryInvoke(nameof(GameHub.ReckonAllEntities));
-        }
 
         /// <summary>
         /// Sends a generic message to all clients. Used to send one-off messages that fall
@@ -262,14 +228,54 @@ namespace SignalRed.Client
         /// <param name="value">The message value</param>
         public async Task SendGenericMessage(string key, string value)
         {
-            var msg = new GenericMessage()
-            {
-                SenderId = ConnectionId,
-                MessageKey = key,
-                MessageValue = value,
-            };
+            var msg = new GenericMessage(ClientId, ConnectionId, key, value);
             await TryInvoke(nameof(GameHub.SendGenericMessage), msg);
         }
+
+
+        /// <summary>
+        /// Registers an entity with the server. Expects the parameter to
+        /// be a serializable state. Will create a unique ID for the entity
+        /// that is based on this ClientId
+        /// </summary>
+        /// <typeparam name="T">The type of state</typeparam>
+        /// <param name="initialState">The initial state the entity should be 
+        /// created in. This will be passed to all clients to create the entity</param>
+        public async Task RegisterEntity<T>(T initialState)
+        {
+            var entityId = GetUniqueEntityId();
+            var msg = new EntityStateMessage(ClientId, ConnectionId, entityId);
+            msg.SetState(initialState);
+            await TryInvoke(nameof(GameHub.RegisterEntity), msg);
+        }
+
+        /// <summary>
+        /// Gets a state from the provided entity and sends an update message
+        /// based on the current state.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="entity"></param>
+        /// <returns></returns>
+        public async Task UpdateEntity<T>(T entity) where T : INetworkEntity
+        {
+            var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId);
+            msg.SetState(entity.GetState<T>());
+            await TryInvoke(nameof(GameHub.UpdateEntity), msg);
+        }
+
+        public async Task DeleteEntity<T>(T entity) where T : INetworkEntity
+        {
+            var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId);
+            msg.SetState(entity.GetState<T>());
+            await TryInvoke(nameof(GameHub.DeleteEntity), msg);
+        }
+
+        public async Task ReckonEntities()
+        {
+            await TryInvoke(nameof(GameHub.ReckonEntities));
+        }
+
+
 
         /// <summary>
         /// Attempts to invoke the provided method name on the hub.
@@ -289,6 +295,7 @@ namespace SignalRed.Client
             await gameHub.InvokeAsync(methodName);
             return true;
         }
+
 
         /// <summary>
         /// Registers all of the handlers for various message types the
@@ -322,18 +329,18 @@ namespace SignalRed.Client
             gameHub.On(nameof(IGameClient.DeleteAllChats),
                 () => ChatDeleteReceived?.Invoke());
 
-            gameHub.On<PayloadMessage>(nameof(IGameClient.CreateEntity),
+            gameHub.On<EntityStateMessage>(nameof(IGameClient.CreateEntity),
                 message => EntityCreateReceived?.Invoke(message));
-            gameHub.On<PayloadMessage>(nameof(IGameClient.UpdateEntity),
+            gameHub.On<EntityStateMessage>(nameof(IGameClient.UpdateEntity),
                 message => EntityUpdateReceived?.Invoke(message));
-            gameHub.On<PayloadMessage>(nameof(IGameClient.DeleteEntity),
+            gameHub.On<EntityStateMessage>(nameof(IGameClient.DeleteEntity),
                 message => EntityDeleteReceived?.Invoke(message));
-            gameHub.On<List<PayloadMessage>>(nameof(IGameClient.ReckonEntities),
+            gameHub.On<List<EntityStateMessage>>(nameof(IGameClient.ReckonEntities),
                 message => EntityReckonReceived?.Invoke(message));
 
             gameHub.On<GenericMessage>(nameof(IGameClient.ReceiveGenericMessage),
                 message => GenericMessageReceived?.Invoke(message));
 
-        }
+        }        
     }
 }

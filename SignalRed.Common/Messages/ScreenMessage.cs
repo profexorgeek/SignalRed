@@ -4,7 +4,7 @@ namespace SignalRed.Common.Messages
 {
     public class ScreenMessage : INetworkMessage
     {
-        public string? SenderId { get; set; }
+        public string? SenderClientId { get; set; }
         public string? SenderConnectionId { get; set; }
 
         /// <summary>
@@ -12,7 +12,7 @@ namespace SignalRed.Common.Messages
         /// </summary>
         public string TargetScreen { get; set; }
 
-        public ScreenMessage(string targetScreen)
+        public ScreenMessage(string clientId, string connectionId, string targetScreen)
         {
             TargetScreen = targetScreen;
         }

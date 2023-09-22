@@ -4,7 +4,7 @@ namespace SignalRed.Common.Messages
 {
     public class GenericMessage : INetworkMessage
     {
-        public string SenderId { get; set; }
+        public string SenderClientId { get; set; }
         public string SenderConnectionId { get; set; }
 
         public string? MessageKey { get; set; }
@@ -12,7 +12,7 @@ namespace SignalRed.Common.Messages
 
         public GenericMessage(string senderId, string senderConnectionId, string messageKey, string messageValue)
         {
-            SenderId = senderId;
+            SenderClientId = senderId;
             SenderConnectionId = senderConnectionId;
         }
     }

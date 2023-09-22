@@ -8,11 +8,12 @@ namespace SignalRed.Common.Messages
     /// with a specified type, allowing it to be deserialized
     /// into a static type when it is received by a client.
     /// 
-    /// Usually used for syncing entities across the network.
+    /// Usually used for syncing the generic concept of game
+    /// entities across the network.
     /// </summary>
-    public class PayloadMessage : INetworkMessage
+    public class EntityStateMessage : INetworkMessage
     {
-        public string SenderId { get; set; }
+        public string SenderClientId { get; set; }
         public string SenderConnectionId { get; set; }
 
         /// <summary>
@@ -22,14 +23,19 @@ namespace SignalRed.Common.Messages
         /// Messages that don't have a unique identifier will not be saved by the
         /// server for reckoning
         /// </summary>
-        public string TargetId { get; set; }
+        public string EntityId { get; set; }
+
+        /// <summary>
+        /// The unique ID (client ID, not connection ID) of the client that created this entity
+        /// </summary>
+        public string OwnerId { get; set; }
 
         /// <summary>
         /// The full type name of the payload. This should usually
         /// NOT be set directly, instead call SetPayload to set the
         /// payload and the type at once.
         /// </summary>
-        public string? PayloadType { get; set; }
+        public string? StateType { get; set; }
 
         /// <summary>
         ///  The payload, which is usually some representation of
@@ -37,14 +43,14 @@ namespace SignalRed.Common.Messages
         ///  usually NOT be set directly, instead call SetPayload to
         ///  set the payload and type at once.
         /// </summary>
-        public string? Payload { get; set; }
+        public string? SerializedState { get; set; }
 
         
-        public PayloadMessage(string senderId, string connectionId, string targetId)
+        public EntityStateMessage(string senderId, string connectionId, string targetId)
         {
-            SenderId = senderId;
+            SenderClientId = senderId;
             SenderConnectionId = connectionId;
-            TargetId = targetId;
+            EntityId = targetId;
         }
         
         /// <summary>
@@ -53,10 +59,10 @@ namespace SignalRed.Common.Messages
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="state"></param>
-        public void SetPayload<T>(T state)
+        public void SetState<T>(T state)
         {
-            Payload = JsonSerializer.Serialize(state);
-            PayloadType = typeof(T).FullName;
+            SerializedState = JsonSerializer.Serialize(state);
+            StateType = typeof(T).FullName;
         }
 
         /// <summary>
@@ -67,15 +73,15 @@ namespace SignalRed.Common.Messages
         /// <returns>A desrialized object or an exception</returns>
         /// <exception cref="Exception">An exception thrown when the provided type T 
         /// does not match PayloadType</exception>
-        public T GetPayload<T>()
+        public T GetState<T>()
         {
-            if(typeof(T).FullName == PayloadType)
+            if(typeof(T).FullName == StateType)
             {
-                return JsonSerializer.Deserialize<T>(Payload);
+                return JsonSerializer.Deserialize<T>(SerializedState);
             }
             else
             {
-                throw new Exception($"Tried to deserialize payload of type {PayloadType} as type {typeof(T).FullName}");
+                throw new Exception($"Tried to deserialize payload of type {StateType} as type {typeof(T).FullName}");
             }
         }
 
@@ -85,7 +91,7 @@ namespace SignalRed.Common.Messages
         /// </summary>
         public override string ToString()
         {
-            return $"{TargetId}({PayloadType})";
+            return $"{EntityId}({StateType})";
         }
     }
 }

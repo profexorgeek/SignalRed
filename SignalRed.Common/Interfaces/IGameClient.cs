@@ -54,49 +54,32 @@ namespace SignalRed.Common.Interfaces
 
 
         /// <summary>
-        /// Called by the server when the client has asked for a list of
-        /// all current users.
+        /// Receives a payload message that should represent a new
+        /// entity.
         /// </summary>
-        /// <param name="users">The server's list of users</param>
-        Task ReckonUsers(List<UserMessage> users);
-
-
-        /// <summary>
-        /// Called when a new message is received from the server
-        /// </summary>
-        /// <param name="message">The message</param>
-        Task ReceiveChat(ChatMessage message);
-        /// <summary>
-        /// Called when the server notifies client that the chat queue should be cleared
-        /// </summary>
-        Task DeleteAllChats();
+        /// <param name="message">The payload message, usually containing a new entity state</param>
+        Task RegisterEntity(EntityStateMessage message);
 
         /// <summary>
-        /// Called by the server when an entity is created
+        /// Receives a payload message that should represent an
+        /// entity update.
         /// </summary>
-        /// <param name="message">The entity to create</param>
-        Task CreateEntity(PayloadMessage message);
+        /// <param name="message">The payload, usually containing an updated entity state</param>
+        Task UpdateEntity(EntityStateMessage message);
+
         /// <summary>
-        /// Called by the server when an entity is updated. If this
-        /// is a reckoning message, the client should force the incoming state
-        /// to ensure game consistency.
+        /// Receives a payload message that should represent an
+        /// entity to be deleted.
         /// </summary>
-        /// <param name="message">The entity to update</param>
-        /// <param name="reckoning">If this is a reckoning message</param>
-        Task UpdateEntity(PayloadMessage message);
-        /// <summary>
-        /// Called by the server when an entity is deleted
-        /// </summary>
-        /// <param name="message">The entity to delete</param>
+        /// <param name="message">The payload, usually containing the entity information to be deleted</param>
         /// <returns></returns>
-        Task DeleteEntity(PayloadMessage message);
-        /// <summary>
-        /// Called when client should force their local state to match
-        /// the state provided by the server
-        /// </summary>
-        /// <param name="entities"></param>
-        Task ReckonEntities(List<PayloadMessage> entities);
+        Task DeleteEntity(EntityStateMessage message);
 
-        
+        /// <summary>
+        /// Receives all payloads that the server is tracking. This should be used to
+        /// sync a local client with the server.
+        /// </summary>
+        /// <param name="message">A list of payloads representing current entity states</param>
+        Task ReckonEntities(List<EntityStateMessage> message);
     }
 }

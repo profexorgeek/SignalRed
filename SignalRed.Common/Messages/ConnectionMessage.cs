@@ -4,12 +4,12 @@ namespace SignalRed.Common.Messages
 {
     public class ConnectionMessage : INetworkMessage
     {
-        public string SenderId { get; set; }
+        public string SenderClientId { get; set; }
         public string SenderConnectionId { get; set; }
 
         public ConnectionMessage(string senderId, string senderConnectionId)
         {
-            SenderId = senderId;
+            SenderClientId = senderId;
             SenderConnectionId = senderConnectionId;
         }
     }

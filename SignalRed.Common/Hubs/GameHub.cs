@@ -8,10 +8,14 @@ using System.Linq.Expressions;
 
 namespace SignalRed.Common.Hubs
 {
+    // TODO: when a client disconnects, we just wipe all of its entities
+    // when reckoning. Should we offer the option to reassign them or 
+    // give the user the ability to choose what to do here?
+
     public class GameHub : Hub<IGameClient>
     {
         static List<ConnectionMessage> connections = new List<ConnectionMessage>();
-        static List<PayloadMessage> payloads = new List<PayloadMessage>();
+        static List<EntityStateMessage> entityStates = new List<EntityStateMessage>();
         static ScreenMessage currentScreen = new ScreenMessage("None");
 
         /// <summary>
@@ -25,7 +29,7 @@ namespace SignalRed.Common.Hubs
             currentScreen = message;
             await Clients.All.MoveToScreen(message);
         }
-        
+
         /// <summary>
         /// Called by a client when it wants to know what screen it should be on
         /// </summary>
@@ -43,11 +47,11 @@ namespace SignalRed.Common.Hubs
         /// <param name="message">The connection to register</param>
         public async Task RegisterConnection(ConnectionMessage message)
         {
-            var existing = connections.Where(c => c.SenderId == message.SenderId).FirstOrDefault();
-            
+            var existing = connections.Where(c => c.SenderClientId == message.SenderClientId).FirstOrDefault();
+
             // we already knew about this client, update the connection ID in case this is a
             // dropped client that has reconnected
-            if(existing != null)
+            if (existing != null)
             {
                 existing.SenderConnectionId = message.SenderConnectionId;
             }
@@ -62,27 +66,27 @@ namespace SignalRed.Common.Hubs
         }
 
         /// <summary>
-        /// Called to fetch a fresh list of all valid connections
-        /// </summary>
-        public async Task FetchConnections()
-        {
-            CleanConnectionList();
-            var validConnections = connections.Where(c => c.SenderConnectionId != null).ToList();
-            await Clients.Caller.ReckonConnections(validConnections);
-        }
-
-        /// <summary>
         /// Called to delete a connection, usually before a graceful disconnect.
         /// </summary>
         /// <param name="message">The connection to delete.</param>
         public async Task DeleteConnection(ConnectionMessage message)
         {
             var existing = connections.Where(c => c.SenderConnectionId == message.SenderConnectionId).FirstOrDefault();
-            if(existing != null)
+            if (existing != null)
             {
                 connections.Remove(existing);
             }
             await Clients.All.DeleteConnection(message);
+        }
+
+        /// <summary>
+        /// Called to fetch a fresh list of all valid connections
+        /// </summary>
+        public async Task ReckonConnections()
+        {
+            CleanConnectionList();
+            var validConnections = connections.Where(c => c.SenderConnectionId != null).ToList();
+            await Clients.Caller.ReckonConnections(validConnections);
         }
 
 
@@ -96,122 +100,85 @@ namespace SignalRed.Common.Hubs
         }
 
 
-        public async RegisterPayload(PayloadMessage message)
+        /// <summary>
+        /// Registers or updates an entity state using EntityId as the unique key. This
+        /// generally assumes that a payload represents a game entity state
+        /// and every game entity should have a unique ID. TNote: this will replace an
+        /// existing payload with the same ID.
+        /// 
+        /// Payloads that have an empty or null EntityId will not be saved on
+        /// the server or passed in Reckoning. If you want a payload message that
+        /// isn't tied to a unique game entity, it is recommended that you use
+        /// GenericMessage instead.
+        /// </summary>
+        /// <param name="message">The payload message</param>
+        /// <returns></returns>
+        public async Task RegisterEntity(EntityStateMessage message)
         {
-            if(message.TargetId != null)
+            if (!string.IsNullOrWhiteSpace(message.EntityId))
             {
+                var existing = entityStates.Where(p => p.EntityId == message.EntityId).FirstOrDefault();
+                // if we have an existing payload, we just remove it and replace it
+                if (existing != null)
+                {
+                    entityStates.Remove(existing);
+                }
+                entityStates.Add(message);
+            }
+            await Clients.All.RegisterEntity(message);
+        }
 
+        /// <summary>
+        /// Updates an entity state if it exists using EntityId as the unique key.
+        /// Noop if it doesn't exist because we may have received an update 
+        /// message after a destroy message and we don't want to accidentally 
+        /// resurrect a dead entity.
+        /// 
+        /// Payloads that have an empty or null EntityId will not be saved on
+        /// the server or passed in Reckoning. If you want a payload message that
+        /// isn't tied to a unique game entity, it is recommended that you use
+        /// GenericMessage instead.
+        /// </summary>
+        /// <param name="message">The payload to be updated</param>
+        public async Task UpdateEntity(EntityStateMessage message)
+        {
+            if (!string.IsNullOrWhiteSpace(message.EntityId))
+            {
+                var existing = entityStates.Where(p => p.EntityId == message.EntityId).FirstOrDefault();
+                // if we have an existing payload, we just remove it and replace it
+                if (existing != null)
+                {
+                    entityStates.Remove(existing);
+                    entityStates.Add(message);
+                    await Clients.All.UpdateEntity(message);
+                }
             }
         }
 
-
-
-        public async Task UpdateUser(UserMessage message)
+        /// <summary>
+        /// Deletes an entity state if it exists using EntityId as the unique key.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        public async Task DeleteEntity(EntityStateMessage message)
         {
-            if (string.IsNullOrWhiteSpace(message.ClientId)) return;
-            var existing = users.Where(u => u.ClientId == message.ClientId).FirstOrDefault();
-            if (existing != null)
+            if(!string.IsNullOrWhiteSpace(message.EntityId))
             {
-                var oldName = existing.UserName;
-                existing.UserName = message.UserName;
-                Console.WriteLine($"{oldName} has changed their name to {message.UserName}");
+                var existing = entityStates.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+                if (existing != null)
+                {
+                    entityStates.Remove(existing);
+                }
             }
-            else
-            {
-                users.Add(message);
-                Console.WriteLine($"{message.UserName} with id {message.ClientId} has joined the server!");
-            }            
-            await Clients.All.RegisterUser(message);
-        }
-        public async Task ReckonUsers()
-        {
-            CleanUserList();
-            await Clients.Caller.ReckonUsers(users);
-        }
-        public async Task DeleteUser(UserMessage message)
-        {
-            if (string.IsNullOrWhiteSpace(message.ClientId)) return;
-
-            var existing = users.Where(u => u.ClientId == message.ClientId).FirstOrDefault();
-            if (existing == null)
-            {
-                Console.WriteLine($"Attempted to remove {message.UserName} but they don't exist on the server!");
-            }
-            else
-            {
-                Console.WriteLine($"{message.UserName} has left the server.");
-                users.Remove(existing);
-
-                // TODO: force disconnect?
-
-                await Clients.All.DeleteUser(message);
-            }
+            await Clients.All.DeleteEntity(message);
         }
 
-        public async Task SendChat(ChatMessage message)
+        public async Task ReckonEntities()
         {
-            // TODO: add targeted messages (DMs)
-            messages.Add(message);
-            Console.WriteLine("Message: " + message);
-            await Clients.All.ReceiveChat(message);
-        }
-        public async Task RequestAllChats()
-        {
-            foreach(var msg in messages)
-            {
-                await Clients.Caller.ReceiveChat(msg);
-            }
-        }
-        public async Task DeleteAllChats()
-        {
-            messages.Clear();
-            await Clients.All.DeleteAllChats();
+            CleanEntityStateList();
+            await Clients.Caller.ReckonEntities(entityStates);
         }
 
-        public async Task CreateEntity(PayloadMessage message)
-        {
-            if (string.IsNullOrWhiteSpace(message.TargetId)) return;
-            var existing = entities.Where(e => e.TargetId == message.TargetId).FirstOrDefault();
-            if(existing == null)
-            {
-                entities.Add(message);
-                await Clients.All.CreateEntity(message);
-            }
-        }
-        public async Task UpdateEntity(PayloadMessage message)
-        {
-            if (string.IsNullOrWhiteSpace(message.TargetId)) return;
-            var existing = entities.Where(e => e.TargetId == message.TargetId).FirstOrDefault();
-            if(existing != null)
-            {
-                entities.Remove(existing);
-                entities.Add(message);
-
-                await Clients.All.UpdateEntity(message);
-            }
-        }
-        public async Task DeleteEntity(PayloadMessage message)
-        {
-            if (string.IsNullOrWhiteSpace(message.TargetId)) return;
-            var existing = entities.Where(e => e.TargetId == message.TargetId).FirstOrDefault();
-            if(existing != null)
-            {
-                entities.Remove(existing);
-                await Clients.All.DeleteEntity(message);
-            }
-        }
-        public async Task ReckonAllEntities()
-        {
-            CleanUserList();
-            CleanEntityList();
-
-            await Clients.Caller.ReckonEntities(entities);
-        }
-
-        public async Task SendGenericMessage(GenericMessage message)
-        {
-            await Clients.All.ReceiveGenericMessage(message);
-        }
 
         /// <summary>
         /// Cleans the user list, removing any users that aren't found
@@ -234,14 +201,14 @@ namespace SignalRed.Common.Hubs
         /// Removes any entities that don't have owners, purging entities owned
         /// by disconnected users.
         /// </summary>
-        void CleanEntityList()
+        void CleanEntityStateList()
         {
-            for(var i = entities.Count - 1; i > -1; i--)
+            for (var i = entityStates.Count - 1; i > -1; i--)
             {
-                var entity = entities[i];
-                if(users.Any(u => u.ClientId == entity.ClientId) == false)
+                var entity = entityStates[i];
+                if (connections.Any(u => u.SenderClientId == entity.OwnerId) == false)
                 {
-                    entities.RemoveAt(i);
+                    entityStates.RemoveAt(i);
                 }
             }
         }
