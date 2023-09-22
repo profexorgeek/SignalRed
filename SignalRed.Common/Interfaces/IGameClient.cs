@@ -25,6 +25,7 @@ namespace SignalRed.Common.Interfaces
         Task MoveToScreen(ScreenMessage message);
 
 
+
         /// <summary>
         /// Called when a new user joins the server or a user changes their name
         /// </summary>
@@ -45,12 +46,6 @@ namespace SignalRed.Common.Interfaces
         /// <param name="message">The connection to remove</param>
         Task DeleteConnection(ConnectionMessage message);
 
-
-        /// <summary>
-        /// Called when client should receive a generic message
-        /// </summary>
-        /// <param name="message">The generic message, a key,value pair</param>
-        Task ReceiveGenericMessage(GenericMessage message);
 
 
         /// <summary>
@@ -81,5 +76,13 @@ namespace SignalRed.Common.Interfaces
         /// </summary>
         /// <param name="message">A list of payloads representing current entity states</param>
         Task ReckonEntities(List<EntityStateMessage> message);
+
+
+
+        /// <summary>
+        /// Called when client should receive a generic message
+        /// </summary>
+        /// <param name="message">The generic message, a key,value pair</param>
+        Task ReceiveGenericMessage(GenericMessage message);
     }
 }
