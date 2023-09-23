@@ -308,6 +308,7 @@ namespace SignalRed.Client
             }
 
             gameHub.Closed += (exception) => {
+                Connected = false;
                 ConnectionClosed?.Invoke(exception);
                 return Task.CompletedTask;
             };
