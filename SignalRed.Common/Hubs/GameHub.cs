@@ -46,7 +46,7 @@ namespace SignalRed.Common.Hubs
         /// a transient ConnectionId
         /// </summary>
         /// <param name="message">The connection to register</param>
-        public async Task RegisterConnection(ConnectionMessage message)
+        public async Task CreateConnection(ConnectionMessage message)
         {
             var existing = connections.Where(c => c.SenderClientId == message.SenderClientId).FirstOrDefault();
 
@@ -64,7 +64,7 @@ namespace SignalRed.Common.Hubs
             }
 
             Console.WriteLine($"Connection received: {message.SenderClientId}:{message.SenderConnectionId}");
-            await Clients.All.RegisterConnection(message);
+            await Clients.All.CreateConnection(message);
         }
 
         /// <summary>
@@ -98,11 +98,12 @@ namespace SignalRed.Common.Hubs
         /// Called to broadcast a generic message.
         /// </summary>
         /// <param name="message">The generic message</param>
-        public async Task SendGenericMessage(GenericMessage message)
+        public async Task CreateGenericMessage(GenericMessage message)
         {
             Console.WriteLine($"Generic received: {message.MessageKey}:{message.MessageValue}");
             await Clients.All.ReceiveGenericMessage(message);
         }
+
 
         /// <summary>
         /// Registers or updates an entity state using EntityId as the unique key. This
@@ -117,7 +118,7 @@ namespace SignalRed.Common.Hubs
         /// </summary>
         /// <param name="message">The payload message</param>
         /// <returns></returns>
-        public async Task RegisterEntity(EntityStateMessage message)
+        public async Task CreateEntity(EntityStateMessage message)
         {
             if (!string.IsNullOrWhiteSpace(message.EntityId))
             {
@@ -130,7 +131,7 @@ namespace SignalRed.Common.Hubs
                 entityStates.Add(message);
             }
             Console.WriteLine($"Registered entity: {message.StateType}:{message.EntityId}");
-            await Clients.All.RegisterEntity(message);
+            await Clients.All.CreateEntity(message);
         }
 
         /// <summary>

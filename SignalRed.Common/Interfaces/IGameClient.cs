@@ -27,10 +27,10 @@ namespace SignalRed.Common.Interfaces
 
 
         /// <summary>
-        /// Called when a new user joins the server or a user changes their name
+        /// Called when a new user joins the server
         /// </summary>
         /// <param name="username">The new username</param>
-        Task RegisterConnection(ConnectionMessage message);
+        Task CreateConnection(ConnectionMessage message);
 
         /// <summary>
         /// Called by the server when the client should reckon its
@@ -53,7 +53,7 @@ namespace SignalRed.Common.Interfaces
         /// entity.
         /// </summary>
         /// <param name="message">The payload message, usually containing a new entity state</param>
-        Task RegisterEntity(EntityStateMessage message);
+        Task CreateEntity(EntityStateMessage message);
 
         /// <summary>
         /// Receives a payload message that should represent an
