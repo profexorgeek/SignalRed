@@ -91,65 +91,25 @@ namespace SignalRed.Client
             return $"{ClientId}_{localEntityIndex}";
         }
 
-
         /// <summary>
         /// Connects to a server at the provided URL, which should
         /// include the protocol (http) and port number
         /// </summary>
         /// <param name="url">The url to connect to, including protocol and port number</param>
-        /// <param name="onConnectedCallback">An action to call when the connection is complete</param>
-        public async Task Connect(string url, Action? onConnectedCallback = null)
+        /// <param name="onConnectedCallback">An optional Action to perform when the connection is complete</param>
+        public void Connect(string url, Action? onConnectedCallback = null)
         {
             var uri = new Uri(url);
-            await Connect(uri, onConnectedCallback);
-        }
-        public async Task Connect(Uri url, Action? onConnectedCallback = null)
-        {
-            if (!initialized)
-            {
-                throw new Exception("Attempted to Connect without initializing SRClient service!");
-            }
-
-            // first disconnect from anything we're already connected to!
-            await Disconnect();
-
-            // now build our hub connection
-            var gameHubUrl = new Uri(url, "game");
-            gameHub = new HubConnectionBuilder()
-                .WithUrl(gameHubUrl)
-                .Build();
-
-            // register our incoming message handlers
-            RegisterHubHandlers();
-
-            // form the connection
-            await gameHub.StartAsync();
-            Connected = true;
-
-            // regiser our unique clientId against our connection ID
-            // with the server
-            await TryInvoke(nameof(GameHub.CreateConnection),
-                new ConnectionMessage(this.ClientId, this.ConnectionId));
-
-            // fire the successful connection event
-            onConnectedCallback?.Invoke();
+            _ = ConnectAsync(uri, onConnectedCallback);
         }
         /// <summary>
-        /// Disconnects from the server if a connection is active
+        /// Disconnects from the server if connected, and calls the provided
+        /// callback once disconnected.
         /// </summary>
-        /// <returns></returns>
-        public async Task Disconnect(Action? onDisconnectedCallback = null)
+        /// <param name="onDisconnectedCallback">An optional Action to perform when the disconnection is complete</param>
+        public void Disconnect(Action? onDisconnectedCallback = null)
         {
-            if (!initialized || !Connected || gameHub == null) return;
-
-            await TryInvoke(nameof(GameHub.DeleteConnection),
-                new ConnectionMessage(ClientId, ConnectionId));
-
-            await gameHub.StopAsync();
-            gameHub = null;
-            Connected = false;
-
-            onDisconnectedCallback?.Invoke();
+            _ = DisconnectAsync(onDisconnectedCallback);
         }
 
 
@@ -260,6 +220,66 @@ namespace SignalRed.Client
         public ScreenMessage GetCurrentScreen() => currentScreen;
 
 
+        /// <summary>
+        /// Connects to the provided server URL and calls
+        /// the provided callback once connected
+        /// </summary>
+        /// <param name="url">The server URL including port</param>
+        /// <param name="onConnectedCallback">A callback to call once connected</param>
+        /// <exception cref="Exception">Thrown if called before initializing this service.</exception>
+        async Task ConnectAsync(Uri url, Action? onConnectedCallback = null)
+        {
+            if (!initialized)
+            {
+                throw new Exception("Attempted to Connect without initializing SRClient service!");
+            }
+
+            // first disconnect from anything we're already connected to!
+            await DisconnectAsync();
+
+            // now build our hub connection
+            var gameHubUrl = new Uri(url, "game");
+            gameHub = new HubConnectionBuilder()
+                .WithUrl(gameHubUrl)
+                .Build();
+
+            // register our incoming message handlers
+            RegisterHubHandlers();
+
+            // form the connection
+            await gameHub.StartAsync();
+            Connected = true;
+
+            // regiser our unique clientId against our connection ID
+            // with the server
+            await TryInvoke(nameof(GameHub.CreateConnection),
+                new ConnectionMessage(this.ClientId, this.ConnectionId));
+
+            // fire the successful connection event
+            onConnectedCallback?.Invoke();
+        }
+        /// <summary>
+        /// Disconnects from the server if a connection is active and
+        /// calls the provided callback once disconnected.
+        /// </summary>
+        async Task DisconnectAsync(Action? onDisconnectedCallback = null)
+        {
+            // EARLY OUT: we're not connected
+            if (!initialized || !Connected || gameHub == null)
+            {
+                onDisconnectedCallback?.Invoke();
+                return;
+            }
+
+            await TryInvoke(nameof(GameHub.DeleteConnection),
+                new ConnectionMessage(ClientId, ConnectionId));
+
+            await gameHub.StopAsync();
+            gameHub = null;
+            Connected = false;
+
+            onDisconnectedCallback?.Invoke();
+        }
         /// <summary>
         /// Attempts to invoke the provided method name on the hub.
         /// 
