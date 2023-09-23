@@ -9,7 +9,7 @@ namespace SignalRed.Common.Interfaces
 
         object GetState();
 
-        void ApplyState(object networkState);
+        void ApplyState(object networkState, bool force = false);
 
         void Destroy();
     }
