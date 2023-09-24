@@ -12,9 +12,9 @@ namespace SignalRed.Common.Hubs
     {
         public static double UnixTimeMilliseconds => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-        static List<ConnectionMessage> connections = new List<ConnectionMessage>();
+        static List<Messages.NetworkMessage> connections = new List<Messages.NetworkMessage>();
         static List<EntityStateMessage> entities = new List<EntityStateMessage>();
-        static ScreenMessage currentScreen = new ScreenMessage("", "", "None");
+        static ScreenMessage currentScreen = new ScreenMessage("", "", UnixTimeMilliseconds, "None");
         static SemaphoreSlim connectionsSemaphor = new SemaphoreSlim(1);
         static SemaphoreSlim entitiesSemaphor = new SemaphoreSlim(1);
 
@@ -54,7 +54,7 @@ namespace SignalRed.Common.Hubs
         /// a transient ConnectionId
         /// </summary>
         /// <param name="message">The connection to register</param>
-        public async Task CreateConnection(ConnectionMessage message)
+        public async Task CreateConnection(Messages.NetworkMessage message)
         {
             await connectionsSemaphor.WaitAsync();
             try
@@ -86,7 +86,7 @@ namespace SignalRed.Common.Hubs
         /// Called to delete a connection, usually before a graceful disconnect.
         /// </summary>
         /// <param name="message">The connection to delete.</param>
-        public async Task DeleteConnection(ConnectionMessage message)
+        public async Task DeleteConnection(Messages.NetworkMessage message)
         {
             await connectionsSemaphor.WaitAsync();
             try
@@ -111,7 +111,7 @@ namespace SignalRed.Common.Hubs
         /// </summary>
         public async Task ReckonConnections()
         {
-            List<ConnectionMessage> tempConnections;
+            List<Messages.NetworkMessage> tempConnections;
             await connectionsSemaphor.WaitAsync();
             try
             {

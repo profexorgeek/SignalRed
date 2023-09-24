@@ -35,21 +35,21 @@ namespace SignalRed.Common.Interfaces
         /// Called when a new user joins the server
         /// </summary>
         /// <param name="username">The new username</param>
-        Task CreateConnection(ConnectionMessage message);
+        Task CreateConnection(Messages.NetworkMessage message);
 
         /// <summary>
         /// Called by the server when the client should reckon its
         /// list of connections with the master list from the server.
         /// </summary>
         /// <param name="message">A list of connections</param>
-        Task ReckonConnections(List<ConnectionMessage> message);
+        Task ReckonConnections(List<Messages.NetworkMessage> message);
 
         /// <summary>
         /// Called by the server when an existing connection is deleted. Usually called before
         /// disconnecting to gracefully disconnect.
         /// </summary>
         /// <param name="message">The connection to remove</param>
-        Task DeleteConnection(ConnectionMessage message);
+        Task DeleteConnection(Messages.NetworkMessage message);
 
 
 

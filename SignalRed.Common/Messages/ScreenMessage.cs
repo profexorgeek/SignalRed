@@ -2,10 +2,8 @@
 
 namespace SignalRed.Common.Messages
 {
-    public class ScreenMessage : INetworkMessage
+    public class ScreenMessage : NetworkMessage
     {
-        public string? SenderClientId { get; set; }
-        public string? SenderConnectionId { get; set; }
 
         /// <summary>
         /// The target screen that all clients should transition to
@@ -18,10 +16,9 @@ namespace SignalRed.Common.Messages
         /// </summary>
         public ScreenMessage() { }
 
-        public ScreenMessage(string senderClientId, string connectionId, string targetScreen)
+        public ScreenMessage(string senderClientId, string senderConnectionId, double sendTime, string targetScreen)
+            :base(senderClientId, senderConnectionId, sendTime)
         {
-            SenderClientId = senderClientId;
-            SenderConnectionId = connectionId;
             TargetScreen = targetScreen;
         }
     }

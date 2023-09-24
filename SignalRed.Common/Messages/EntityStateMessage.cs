@@ -11,11 +11,8 @@ namespace SignalRed.Common.Messages
     /// Usually used for syncing the generic concept of game
     /// entities across the network.
     /// </summary>
-    public class EntityStateMessage : INetworkMessage
+    public class EntityStateMessage : NetworkMessage
     {
-        public string SenderClientId { get; set; }
-        public string SenderConnectionId { get; set; }
-
         /// <summary>
         /// The target's unique identifier if the target
         /// is an entity.
@@ -51,10 +48,9 @@ namespace SignalRed.Common.Messages
         /// </summary>
         public EntityStateMessage() { }
 
-        public EntityStateMessage(string senderClientId, string senderConnectionId, string enitityId, string ownerClientId)
+        public EntityStateMessage(string senderClientId, string senderConnectionId, double sendTime, string enitityId, string ownerClientId)
+            :base(senderClientId, senderConnectionId, sendTime)
         {
-            SenderClientId = senderClientId;
-            SenderConnectionId = senderConnectionId;
             EntityId = enitityId;
             OwnerClientId = ownerClientId;
         }
@@ -79,11 +75,19 @@ namespace SignalRed.Common.Messages
         /// <returns>A desrialized object or an exception</returns>
         /// <exception cref="Exception">An exception thrown when the provided type T 
         /// does not match PayloadType</exception>
-        public T GetState<T>()
+        public T? GetState<T>()
         {
             if (typeof(T).FullName == StateType)
             {
-                return JsonSerializer.Deserialize<T>(SerializedState);
+                try
+                {
+                    return JsonSerializer.Deserialize<T>(SerializedState);
+                }
+                catch(Exception e)
+                {
+                    return default(T);
+                }
+                
             }
             else
             {

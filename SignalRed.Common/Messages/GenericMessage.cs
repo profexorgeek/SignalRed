@@ -2,10 +2,8 @@
 
 namespace SignalRed.Common.Messages
 {
-    public class GenericMessage : INetworkMessage
+    public class GenericMessage : NetworkMessage
     {
-        public string SenderClientId { get; set; }
-        public string SenderConnectionId { get; set; }
 
         public string MessageKey { get; set; }
         public string MessageValue { get; set; }
@@ -16,10 +14,9 @@ namespace SignalRed.Common.Messages
         /// </summary>
         public GenericMessage() { }
 
-        public GenericMessage(string senderClientId, string senderConnectionId, string messageKey, string messageValue)
+        public GenericMessage(string senderClientId, string senderConnectionId, double sendTime, string messageKey, string messageValue)
+            :base(senderClientId, senderConnectionId, sendTime)
         {
-            SenderClientId = senderClientId;
-            SenderConnectionId = senderConnectionId;
             MessageKey = messageKey;
             MessageValue = messageValue;
         }

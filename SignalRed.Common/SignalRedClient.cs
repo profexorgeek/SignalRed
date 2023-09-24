@@ -37,7 +37,7 @@ namespace SignalRed.Client
         double lastServerTime;
         List<double> roundtripSamples = new List<double>();
         ConcurrentQueue<Tuple<EntityStateMessage, SignalRedMessageType>> entities = new ConcurrentQueue<Tuple<EntityStateMessage, SignalRedMessageType>>();
-        ConcurrentQueue<Tuple<ConnectionMessage, SignalRedMessageType>> connections = new ConcurrentQueue<Tuple<ConnectionMessage, SignalRedMessageType>>();
+        ConcurrentQueue<Tuple<NetworkMessage, SignalRedMessageType>> connections = new ConcurrentQueue<Tuple<NetworkMessage, SignalRedMessageType>>();
         ConcurrentQueue<GenericMessage> genericMessages = new ConcurrentQueue<GenericMessage>();
         ScreenMessage currentScreen = new ScreenMessage();
 
@@ -91,7 +91,7 @@ namespace SignalRed.Client
         /// The estimated offset between client and server time in milliseconds.
         /// Calculated by averaging multiple roundtrip time samples.
         /// </summary>
-        public double ServerTimeOffset { get; private set; }
+        public double ServerTimeOffset { get; private set; } = 0;
 
         /// <summary>
         /// The estimated precise time on the server. This is used to 
@@ -171,7 +171,7 @@ namespace SignalRed.Client
         /// <param name="screenName">The name of the screen to transition to</param>
         public void RequestScreenTransition(string screenName)
         {
-            var msg = new ScreenMessage(ClientId, ConnectionId, screenName);
+            var msg = new ScreenMessage(ClientId, ConnectionId, ServerTime, screenName);
             _ = TryInvoke(nameof(GameHub.MoveToScreen), msg);
         }
         /// <summary>
@@ -192,7 +192,7 @@ namespace SignalRed.Client
         /// <param name="value">The message value</param>
         public void CreateGenericMessage(string key, string value)
         {
-            var msg = new GenericMessage(ClientId, ConnectionId, key, value);
+            var msg = new GenericMessage(ClientId, ConnectionId, ServerTime, key, value);
             _ = TryInvoke(nameof(GameHub.CreateGenericMessage), msg);
         }
 
@@ -208,7 +208,7 @@ namespace SignalRed.Client
         public void CreateEntity<T>(T initialState)
         {
             var entityId = GetUniqueEntityId();
-            var msg = new EntityStateMessage(ClientId, ConnectionId, entityId, ClientId);
+            var msg = new EntityStateMessage(ClientId, ConnectionId, ServerTime, entityId, ClientId);
             msg.SetState(initialState);
             _ = TryInvoke(nameof(GameHub.CreateEntity), msg);
         }
@@ -219,9 +219,9 @@ namespace SignalRed.Client
         /// <typeparam name="T">The type of entity</typeparam>
         /// <param name="entity">The entity to update</param>
         /// <returns></returns>
-        public void UpdateEntity<T>(T entity) where T : INetworkEntity
+        public void UpdateEntity<T>(ISignalRedEntity<T> entity)
         {
-            var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId, entity.OwnerClientId);
+            var msg = new EntityStateMessage(ClientId, ConnectionId, ServerTime, entity.EntityId, entity.OwnerClientId);
             var state = entity.GetState();
             msg.SetState(state);
             _ = TryInvoke(nameof(GameHub.UpdateEntity), msg);
@@ -233,9 +233,9 @@ namespace SignalRed.Client
         /// <typeparam name="T"></typeparam>
         /// <param name="entity"></param>
         /// <returns></returns>
-        public void DeleteEntity<T>(T entity) where T : INetworkEntity
+        public void DeleteEntity<T>(ISignalRedEntity<T> entity)
         {
-            var msg = new EntityStateMessage(ClientId, ConnectionId, entity.EntityId, entity.OwnerClientId);
+            var msg = new EntityStateMessage(ClientId, ConnectionId, ServerTime, entity.EntityId, entity.OwnerClientId);
             var state = entity.GetState();
             msg.SetState(state);
             _ = TryInvoke(nameof(GameHub.DeleteEntity), msg);
@@ -249,7 +249,6 @@ namespace SignalRed.Client
             _ = TryInvoke(nameof(GameHub.ReckonEntities));
         }
 
-
         /// <summary>
         /// Gets a list of entity messages that have arrived since the last frame
         /// </summary>
@@ -259,7 +258,7 @@ namespace SignalRed.Client
         /// Gets a list of connection messages that have arrived since the last frame
         /// </summary>
         /// <returns>A list of tuples containing messages and the type of message</returns>
-        public List<Tuple<ConnectionMessage, SignalRedMessageType>> GetConnectionMessages() => ThreadsafeCopyAndClearQueue(connections);
+        public List<Tuple<Common.Messages.NetworkMessage, SignalRedMessageType>> GetConnectionMessages() => ThreadsafeCopyAndClearQueue(connections);
         /// <summary>
         /// Gets a list of generic messages that have arrived since the last frame
         /// </summary>
@@ -343,7 +342,7 @@ namespace SignalRed.Client
             // regiser our unique clientId against our connection ID
             // with the server
             await TryInvoke(nameof(GameHub.CreateConnection),
-                new ConnectionMessage(this.ClientId, this.ConnectionId));
+                new Common.Messages.NetworkMessage(this.ClientId, this.ConnectionId, this.ServerTime));
 
             // fire the successful connection event
             onConnectedCallback?.Invoke();
@@ -362,7 +361,7 @@ namespace SignalRed.Client
             }
 
             await TryInvoke(nameof(GameHub.DeleteConnection),
-                new ConnectionMessage(ClientId, ConnectionId));
+                new Common.Messages.NetworkMessage(ClientId, ConnectionId, ServerTime));
 
             await gameHub.StopAsync();
             gameHub = null;
@@ -430,11 +429,11 @@ namespace SignalRed.Client
             gameHub.On<double>(nameof(IGameClient.ReceiveServerTime), time => UpdateServerTimeOffset(time));
 
             // handle incoming connection messages
-            gameHub.On<ConnectionMessage>(nameof(IGameClient.CreateConnection),
-                message => connections.Enqueue(Tuple.Create(message, SignalRedMessageType.Create)));
-            gameHub.On<ConnectionMessage>(nameof(IGameClient.DeleteConnection),
-                message => connections.Enqueue(Tuple.Create(message, SignalRedMessageType.Delete)));
-            gameHub.On<List<ConnectionMessage>>(nameof(IGameClient.ReckonConnections), messages =>
+            gameHub.On(nameof(IGameClient.CreateConnection),
+                (Common.Messages.NetworkMessage                 message) => connections.Enqueue(Tuple.Create(message, SignalRedMessageType.Create)));
+            gameHub.On(nameof(IGameClient.DeleteConnection),
+                (Common.Messages.NetworkMessage                 message) => connections.Enqueue(Tuple.Create(message, SignalRedMessageType.Delete)));
+            gameHub.On(nameof(IGameClient.ReckonConnections), (List<Common.Messages.NetworkMessage> messages) =>
             {
                 foreach (var message in messages)
                 {
