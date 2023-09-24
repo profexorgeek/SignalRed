@@ -13,9 +13,6 @@ namespace SignalRed.Client
     // implementing party and this client just dumbly allows any kind of well-formed
     // message?
 
-    public delegate void SignalRedEvent<T>(T? message);
-    public delegate void SignalRedEvent();
-
     public enum SignalRedMessageType
     {
         Unknown = 0,

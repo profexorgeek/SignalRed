@@ -1,10 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using SignalRed.Common.Interfaces;
 using SignalRed.Common.Messages;
-using System.Reflection.Metadata.Ecma335;
-using System.Text.Json;
-using System.Linq;
-using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
 
 namespace SignalRed.Common.Hubs
 {
@@ -15,8 +12,10 @@ namespace SignalRed.Common.Hubs
     public class GameHub : Hub<IGameClient>
     {
         static List<ConnectionMessage> connections = new List<ConnectionMessage>();
-        static List<EntityStateMessage> entityStates = new List<EntityStateMessage>();
+        static List<EntityStateMessage> entities = new List<EntityStateMessage>();
         static ScreenMessage currentScreen = new ScreenMessage("", "", "None");
+        static SemaphoreSlim connectionsSemaphor = new SemaphoreSlim(1);
+        static SemaphoreSlim entitiesSemaphor = new SemaphoreSlim(1);
 
         /// <summary>
         /// Called by a client when it wants all clients to move
@@ -48,21 +47,28 @@ namespace SignalRed.Common.Hubs
         /// <param name="message">The connection to register</param>
         public async Task CreateConnection(ConnectionMessage message)
         {
-            var existing = connections.Where(c => c.SenderClientId == message.SenderClientId).FirstOrDefault();
-
-            // we already knew about this client, update the connection ID in case this is a
-            // dropped client that has reconnected
-            if (existing != null)
+            await connectionsSemaphor.WaitAsync();
+            try
             {
-                existing.SenderConnectionId = message.SenderConnectionId;
-            }
+                var existing = connections.Where(c => c.SenderClientId == message.SenderClientId).FirstOrDefault();
 
-            // this is a new user
-            else
+                // we already knew about this client, update the connection ID in case this is a
+                // dropped client that has reconnected
+                if (existing != null)
+                {
+                    existing.SenderConnectionId = message.SenderConnectionId;
+                }
+                // this is a new client
+                else
+                {
+                    connections.Add(message);
+                }
+            }
+            finally
             {
-                connections.Add(message);
+                connectionsSemaphor.Release();
             }
-
+            
             Console.WriteLine($"Connection received: {message.SenderClientId}:{message.SenderConnectionId}");
             await Clients.All.CreateConnection(message);
         }
@@ -73,11 +79,20 @@ namespace SignalRed.Common.Hubs
         /// <param name="message">The connection to delete.</param>
         public async Task DeleteConnection(ConnectionMessage message)
         {
-            var existing = connections.Where(c => c.SenderConnectionId == message.SenderConnectionId).FirstOrDefault();
-            if (existing != null)
+            await connectionsSemaphor.WaitAsync();
+            try
             {
-                connections.Remove(existing);
+                var existing = connections.Where(c => c.SenderConnectionId == message.SenderConnectionId).FirstOrDefault();
+                if (existing != null)
+                {
+                    connections.Remove(existing);
+                }
             }
+            finally
+            {
+                connectionsSemaphor.Release();
+            }
+
             Console.WriteLine($"Connection removed: {message.SenderClientId}:{message.SenderConnectionId}");
             await Clients.All.DeleteConnection(message);
         }
@@ -87,9 +102,24 @@ namespace SignalRed.Common.Hubs
         /// </summary>
         public async Task ReckonConnections()
         {
-            CleanConnectionList();
-            var validConnections = connections.Where(c => c.SenderConnectionId != null).ToList();
-            await Clients.Caller.ReckonConnections(validConnections);
+            List<ConnectionMessage> tempConnections;
+            await connectionsSemaphor.WaitAsync();
+            try
+            {
+                for (var i = connections.Count - 1; i > -1; i--)
+                {
+                    if (Clients.Client(connections[i].SenderConnectionId) == null)
+                    {
+                        connections.RemoveAt(i);
+                    }
+                }
+                tempConnections = connections.Where(c => c.SenderConnectionId != null).ToList();
+            }
+            finally
+            {
+                connectionsSemaphor.Release();
+            }
+            await Clients.Caller.ReckonConnections(tempConnections);
         }
 
 
@@ -122,16 +152,29 @@ namespace SignalRed.Common.Hubs
         {
             if (!string.IsNullOrWhiteSpace(message.EntityId))
             {
-                var existing = entityStates.Where(p => p.EntityId == message.EntityId).FirstOrDefault();
-                // if we have an existing payload, we just remove it and replace it
-                if (existing != null)
+                await entitiesSemaphor.WaitAsync();
+                try
                 {
-                    entityStates.Remove(existing);
+                    var existing = entities.Where(p => p.EntityId == message.EntityId).FirstOrDefault();
+                    // if we have an existing payload, we just remove it and replace it
+                    if (existing != null)
+                    {
+                        entities.Remove(existing);
+                    }
+                    entities.Add(message);
                 }
-                entityStates.Add(message);
+                finally
+                {
+                    entitiesSemaphor.Release();
+                }
+
+                Console.WriteLine($"Registered entity: {message.StateType}:{message.EntityId}");
+                await Clients.All.CreateEntity(message);
             }
-            Console.WriteLine($"Registered entity: {message.StateType}:{message.EntityId}");
-            await Clients.All.CreateEntity(message);
+            else
+            {
+                throw new Exception($"Cannot create entity with null or empty unique ID! {message.StateType}:{message.EntityId}");
+            }
         }
 
         /// <summary>
@@ -150,14 +193,26 @@ namespace SignalRed.Common.Hubs
         {
             if (!string.IsNullOrWhiteSpace(message.EntityId))
             {
-                var existing = entityStates.Where(p => p.EntityId == message.EntityId).FirstOrDefault();
-                // if we have an existing payload, we just remove it and replace it
-                if (existing != null)
+                await entitiesSemaphor.WaitAsync();
+                try
                 {
-                    entityStates.Remove(existing);
-                    entityStates.Add(message);
-                    await Clients.All.UpdateEntity(message);
+                    var existing = entities.Where(p => p.EntityId == message.EntityId).FirstOrDefault();
+                    // if we have an existing payload, we just remove it and replace it
+                    if (existing != null)
+                    {
+                        entities.Remove(existing);
+                        entities.Add(message);
+                    }
                 }
+                finally
+                {
+                    entitiesSemaphor.Release();
+                }
+                await Clients.All.UpdateEntity(message);
+            }
+            else
+            {
+                throw new Exception($"Cannot update an entity with no unique ID!");
             }
         }
 
@@ -168,16 +223,29 @@ namespace SignalRed.Common.Hubs
         /// <returns></returns>
         public async Task DeleteEntity(EntityStateMessage? message)
         {
-            if(!string.IsNullOrWhiteSpace(message.EntityId))
+            if (!string.IsNullOrWhiteSpace(message.EntityId))
             {
-                var existing = entityStates.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
-                if (existing != null)
+                await entitiesSemaphor.WaitAsync();
+                try
                 {
-                    entityStates.Remove(existing);
+                    var existing = entities.Where(e => e.EntityId == message.EntityId).FirstOrDefault();
+                    if (existing != null)
+                    {
+                        entities.Remove(existing);
+                    }
                 }
+                finally
+                {
+                    entitiesSemaphor.Release();
+                }
+                Console.WriteLine($"Deleted entity: {message.StateType}:{message.EntityId}");
+                await Clients.All.DeleteEntity(message);
             }
-            Console.WriteLine($"Deleted entity: {message.StateType}:{message.EntityId}");
-            await Clients.All.DeleteEntity(message);
+            else
+            {
+                throw new Exception($"Cannot delete an entity with no unique ID!");
+            }
+            
         }
 
         /// <summary>
@@ -186,43 +254,40 @@ namespace SignalRed.Common.Hubs
         /// <returns></returns>
         public async Task ReckonEntities()
         {
-            CleanEntityStateList();
-            await Clients.Caller.ReckonEntities(entityStates);
-        }
-
-
-
-        /// <summary>
-        /// Cleans the user list, removing any users that aren't found
-        /// in the connected clients
-        /// </summary>
-        void CleanConnectionList()
-        {
-            // TODO: remove long-dead connections from the list
-
-            for (var i = connections.Count - 1; i > -1; i--)
+            // to reckon entities we need to lock both the connections and entities semaphors
+            // so that neither collection is changed by some other thread while we clean them both up
+            // we also do an on-the-fly list cleanup of any entities that have no owning connection
+            var entityListCopy = new List<EntityStateMessage>();
+            await entitiesSemaphor.WaitAsync();
+            try
             {
-                if (Clients.Client(connections[i].SenderConnectionId) == null)
+                await connectionsSemaphor.WaitAsync();
+                try
                 {
-                    connections[i].SenderConnectionId = null;
+                    for (var i = entities.Count - 1; i > -1; i--)
+                    {
+                        var entity = entities[i];
+
+                        if (connections.Any(u => u.SenderClientId == entity.OwnerClientId) == false)
+                        {
+                            entities.RemoveAt(i);
+                        }
+                        else
+                        {
+                            entityListCopy.Add(entity);
+                        }
+                    }
+                }
+                finally
+                {
+                    connectionsSemaphor.Release();
                 }
             }
-        }
-
-        /// <summary>
-        /// Removes any entities that don't have owners, purging entities owned
-        /// by disconnected users.
-        /// </summary>
-        void CleanEntityStateList()
-        {
-            for (var i = entityStates.Count - 1; i > -1; i--)
+            finally
             {
-                var entity = entityStates[i];
-                if (connections.Any(u => u.SenderClientId == entity.OwnerClientId) == false)
-                {
-                    entityStates.RemoveAt(i);
-                }
+                entitiesSemaphor.Release();
             }
+            await Clients.Caller.ReckonEntities(entityListCopy);
         }
     }
 }
