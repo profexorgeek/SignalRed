@@ -5,9 +5,8 @@ using System.Runtime.CompilerServices;
 
 namespace SignalRed.Common.Hubs
 {
-    // TODO: when a client disconnects, we just wipe all of its entities
-    // when reckoning. Should we offer the option to reassign them or 
-    // give the user the ability to choose what to do here?
+    // TODOs:
+    // 1) Figure out what to do with leftover entities when a client disconnects unexpectedly
 
     public class GameHub : Hub<IGameClient>
     {

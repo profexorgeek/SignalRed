@@ -9,11 +9,11 @@ using static System.Formats.Asn1.AsnWriter;
 namespace SignalRed.Client
 {
     // TODOs
-    // This client should have some sort of setting that defines whether it's
-    // the game authority? Only the game authority should have the right to kick
-    // players or force screen transitions. Alternatively, this could be up to the
-    // implementing party and this client just dumbly allows any kind of well-formed
-    // message?
+    // - Add timestamps to messages
+    // - Add ability to simulate latency
+    // - Test interpolation and prediction with timestamps
+    // - Figure out authoritative pattern
+    // - Make INetworkEntity use generics instead of objects that must be cast
 
     public enum SignalRedMessageType
     {
