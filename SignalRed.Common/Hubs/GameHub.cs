@@ -43,9 +43,9 @@ namespace SignalRed.Common.Hubs
         /// Called by a client to get the server's time. This is used to measure roundtrip time
         /// and timestamp messages.
         /// </summary>
-        public async Task RequestServerTime()
+        public async Task RequestServerTime(string requestId)
         {
-            await Clients.Caller.ReceiveServerTime(UnixTimeMilliseconds);
+            await Clients.Caller.ReceiveServerTime(requestId, UnixTimeMilliseconds);
         }
 
 
@@ -208,8 +208,13 @@ namespace SignalRed.Common.Hubs
                 try
                 {
                     var existing = entities.Where(p => p.EntityId == message.EntityId).FirstOrDefault();
+                    var staleMessage = existing.SendTime > message.SendTime;
+                    if (staleMessage)
+                    {
+                        Console.WriteLine($"Discrading stale {message.StateType} message that is {existing.SendTime - message.SendTime} older.");
+                    }
                     // if we have an existing payload, and it's newer
-                    if (existing != null && existing.SendTime < message.SendTime)
+                    if (existing != null && !staleMessage)
                     {
                         entities.Remove(existing);
                         entities.Add(message);
