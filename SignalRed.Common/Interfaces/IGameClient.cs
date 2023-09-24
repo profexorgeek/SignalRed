@@ -24,7 +24,12 @@ namespace SignalRed.Common.Interfaces
         /// <param name="screenName">The target screen to move to</param>
         Task MoveToScreen(ScreenMessage message);
 
-
+        /// <summary>
+        /// Receives the current server time
+        /// </summary>
+        /// <param name="milliseconds"></param>
+        /// <returns></returns>
+        Task ReceiveServerTime(double milliseconds);
 
         /// <summary>
         /// Called when a new user joins the server

@@ -11,6 +11,8 @@ namespace SignalRed.Common.Hubs
 
     public class GameHub : Hub<IGameClient>
     {
+        public static double UnixTimeMilliseconds => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
         static List<ConnectionMessage> connections = new List<ConnectionMessage>();
         static List<EntityStateMessage> entities = new List<EntityStateMessage>();
         static ScreenMessage currentScreen = new ScreenMessage("", "", "None");
@@ -38,6 +40,14 @@ namespace SignalRed.Common.Hubs
             await Clients.Caller.MoveToScreen(currentScreen);
         }
 
+        /// <summary>
+        /// Called by a client to get the server's time. This is used to measure roundtrip time
+        /// and timestamp messages.
+        /// </summary>
+        public async Task RequestServerTime()
+        {
+            await Clients.Caller.ReceiveServerTime(UnixTimeMilliseconds);
+        }
 
 
         /// <summary>

@@ -1,8 +1,10 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
+﻿using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.SignalR.Client;
 using SignalRed.Common.Hubs;
 using SignalRed.Common.Interfaces;
 using SignalRed.Common.Messages;
 using System.Collections.Concurrent;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace SignalRed.Client
 {
@@ -24,13 +26,16 @@ namespace SignalRed.Client
 
     public class SignalRedClient
     {
+
         private static SignalRedClient instance;
         private HubConnection? gameHub;
         private bool initialized = false;
         private string user = "new user";
         private ulong localEntityIndex = 0;
         private string clientId;
-
+        double lastRoundtripRequestTime;
+        double lastServerTime;
+        List<double> roundtripSamples = new List<double>();
         ConcurrentQueue<Tuple<EntityStateMessage, SignalRedMessageType>> entities = new ConcurrentQueue<Tuple<EntityStateMessage, SignalRedMessageType>>();
         ConcurrentQueue<Tuple<ConnectionMessage, SignalRedMessageType>> connections = new ConcurrentQueue<Tuple<ConnectionMessage, SignalRedMessageType>>();
         ConcurrentQueue<GenericMessage> genericMessages = new ConcurrentQueue<GenericMessage>();
@@ -56,14 +61,43 @@ namespace SignalRed.Client
         public string ClientId => clientId;
 
         /// <summary>
+        /// How many roundtrip offsets we should average to guess our local time offset
+        /// from the server time
+        /// </summary>
+        public int RoundtripSamplesToCollect { get; set; } = 10;
+
+        /// <summary>
+        /// How often to sample the roundtrip time between this client and the server
+        /// </summary>
+        public float RoundtripSampleFrequencySeconds { get; set; } = 0.5f;
+
+        /// <summary>
         /// How frequently the client should reckon its lists with the server
         /// </summary>
-        public float ReckonFrequencySeconds = 3f;
+        public float ReckonFrequencySeconds { get; set; } = 3f;
 
         /// <summary>
         /// The connected or disconnected status of the client.
         /// </summary>
         public bool Connected { get; private set; } = false;
+
+        /// <summary>
+        /// The average time it takes in milliseconds for a message from
+        /// this client to reach the server
+        /// </summary>
+        public double Ping => roundtripSamples.Count > 0 ? roundtripSamples.Average() / 2d : 0d;
+
+        /// <summary>
+        /// The estimated offset between client and server time in milliseconds.
+        /// Calculated by averaging multiple roundtrip time samples.
+        /// </summary>
+        public double ServerTimeOffset { get; private set; }
+
+        /// <summary>
+        /// The estimated precise time on the server. This is used to 
+        /// </summary>
+        public double ServerTime => GameHub.UnixTimeMilliseconds + ServerTimeOffset;
+            
 
 
         /// <summary>
@@ -76,6 +110,27 @@ namespace SignalRed.Client
             clientId = Guid.NewGuid().ToString("N");
             localEntityIndex = 0;
             initialized = true;
+        }
+        /// <summary>
+        /// Updates this service, which performs maintenance tasks such as
+        /// measuring the roundtrip message time to the server. This should
+        /// be called in the game client at a root level every tick.
+        /// </summary>
+        public void Update()
+        {
+            // EARLY OUT: not initialized
+            if(!initialized)
+            {
+                return;
+            }
+
+            if(Connected)
+            {
+                if(lastRoundtripRequestTime < GameHub.UnixTimeMilliseconds - (RoundtripSampleFrequencySeconds * 1000))
+                {
+                    RequestServerTime();
+                }
+            }
         }
         /// <summary>
         /// Used to get a unique entity ID when creating
@@ -216,7 +271,45 @@ namespace SignalRed.Client
         /// <returns></returns>
         public ScreenMessage GetCurrentScreen() => currentScreen;
 
+        /// <summary>
+        /// Sends a request to the server for its time so we can track roundtrip time and measure
+        /// our average time delta from the server.
+        /// </summary>
+        void RequestServerTime()
+        {
+            lastRoundtripRequestTime = GameHub.UnixTimeMilliseconds;
+            _ = TryInvoke(nameof(GameHub.RequestServerTime));
+        }
+        /// <summary>
+        /// Recalculates our offset from server time, which is used
+        /// to guess at a synchronized network time.
+        /// </summary>
+        /// <param name="receivedServerTime">A time we just received from the server in response to a request</param>
+        void UpdateServerTimeOffset(double receivedServerTime)
+        {
+            // update the most recent server time we received
+            lastServerTime = receivedServerTime;
 
+            // figure out the most recent roundtrip time
+            var lastRoundtrip = GameHub.UnixTimeMilliseconds - lastRoundtripRequestTime;
+
+            // update our roundtrip samples collection
+            roundtripSamples.Add(lastRoundtrip);
+            while(roundtripSamples.Count > RoundtripSamplesToCollect)
+            {
+                roundtripSamples.RemoveAt(0);
+            }
+
+            // guess what time it was on the server the last time we
+            // sent a time request by taking the time we got back and
+            // subtracting the time it should have taken for our request
+            // to reach to the server
+            var lastAdjustedServerTime = lastServerTime - Ping;
+
+            // now we can calculate our offset from the server time and use
+            // this to calculate the server time at any given moment
+            ServerTimeOffset = lastRoundtripRequestTime - lastAdjustedServerTime;
+        }
         /// <summary>
         /// Connects to the provided server URL and calls
         /// the provided callback once connected
@@ -332,6 +425,9 @@ namespace SignalRed.Client
                 // TODO: how to notify game client that connection failed?
                 return Task.CompletedTask;
             };
+
+            // handle measuring roundtrip time and server time offset
+            gameHub.On<double>(nameof(IGameClient.ReceiveServerTime), time => UpdateServerTimeOffset(time));
 
             // handle incoming connection messages
             gameHub.On<ConnectionMessage>(nameof(IGameClient.CreateConnection),
