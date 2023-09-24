@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Binders;
 using Microsoft.AspNetCore.SignalR.Client;
 using SignalRed.Common.Hubs;
 using SignalRed.Common.Interfaces;
@@ -33,14 +34,15 @@ namespace SignalRed.Client
         private string user = "new user";
         private ulong localEntityIndex = 0;
         private string clientId;
-        double lastRoundtripRequestTime;
-        double lastServerTime;
+        private double nextTimeCheck = 0;
         Random rand = new Random();
         List<double> roundtripSamples = new List<double>();
+        ConcurrentDictionary<string, double> roundtripRequests = new ConcurrentDictionary<string, double>();
         ConcurrentQueue<Tuple<EntityStateMessage, SignalRedMessageType>> entities = new ConcurrentQueue<Tuple<EntityStateMessage, SignalRedMessageType>>();
         ConcurrentQueue<Tuple<NetworkMessage, SignalRedMessageType>> connections = new ConcurrentQueue<Tuple<NetworkMessage, SignalRedMessageType>>();
         ConcurrentQueue<GenericMessage> genericMessages = new ConcurrentQueue<GenericMessage>();
         ScreenMessage currentScreen = new ScreenMessage();
+        SemaphoreSlim timingSemaphor = new SemaphoreSlim(1);
 
         /// <summary>
         /// The singleton instance of this service.
@@ -64,7 +66,7 @@ namespace SignalRed.Client
         /// How many roundtrip offsets we should average to guess our local time offset
         /// from the server time
         /// </summary>
-        public int RoundtripSamplesToCollect { get; set; } = 10;
+        public int RoundtripSamplesToCollect { get; set; } = 4;
 
         /// <summary>
         /// How often to sample the roundtrip time between this client and the server
@@ -74,13 +76,19 @@ namespace SignalRed.Client
         /// <summary>
         /// How frequently the client should reckon its lists with the server
         /// </summary>
-        public float ReckonFrequencySeconds { get; set; } = 3f;
+        public float ReckonFrequencyMilliseconds { get; set; } = 3f;
 
         /// <summary>
-        /// Only implemented in DEBUG builds, adds delay between 0 and value
-        /// to every request to simulate random latency for tolerance testing.
+        /// Only implemented in DEBUG builds, adds some latency to each request between
+        /// MinAveLatencySeconds and MaxAveLatencySeconds
         /// </summary>
-        public float DebugMaxSimulatedLatencyMilliseconds { get; set; } = 0f;
+        public int MinAveLatencyMilliseconds { get; set; } = 0;
+
+        /// <summary>
+        /// Only implemented in DEBUG builds, adds some latency to each request between
+        /// MinAveLatencySeconds and MaxAveLatencySeconds
+        /// </summary>
+        public int MaxAveLatencySeconds { get; set; } = 0;
 
         /// <summary>
         /// The connected or disconnected status of the client.
@@ -91,7 +99,7 @@ namespace SignalRed.Client
         /// The average time it takes in milliseconds for a message from
         /// this client to reach the server
         /// </summary>
-        public double Ping => roundtripSamples.Count > 0 ? roundtripSamples.Average() / 2d : 0d;
+        public double Ping { get; private set; }
 
         /// <summary>
         /// The estimated offset between client and server time in milliseconds.
@@ -103,7 +111,7 @@ namespace SignalRed.Client
         /// The estimated precise time on the server. This is used to 
         /// </summary>
         public double ServerTime => GameHub.UnixTimeMilliseconds + ServerTimeOffset;
-            
+
 
 
         /// <summary>
@@ -125,14 +133,14 @@ namespace SignalRed.Client
         public void Update()
         {
             // EARLY OUT: not initialized
-            if(!initialized)
+            if (!initialized)
             {
                 return;
             }
 
-            if(Connected)
+            if (Connected)
             {
-                if(lastRoundtripRequestTime < GameHub.UnixTimeMilliseconds - (RoundtripSampleFrequencySeconds * 1000))
+                if (GameHub.UnixTimeMilliseconds > nextTimeCheck)
                 {
                     RequestServerTime();
                 }
@@ -282,38 +290,60 @@ namespace SignalRed.Client
         /// </summary>
         void RequestServerTime()
         {
-            lastRoundtripRequestTime = GameHub.UnixTimeMilliseconds;
-            _ = TryInvoke(nameof(GameHub.RequestServerTime));
+            
+            var id = Guid.NewGuid().ToString("N");
+            var now = GameHub.UnixTimeMilliseconds;
+            nextTimeCheck = now + (RoundtripSampleFrequencySeconds * 1000);
+            var successfulAdd = roundtripRequests.TryAdd(id, now);
+            if (successfulAdd)
+            {
+                _ = TryInvoke(nameof(GameHub.RequestServerTime), id);
+            }
         }
         /// <summary>
         /// Recalculates our offset from server time, which is used
         /// to guess at a synchronized network time.
         /// </summary>
         /// <param name="receivedServerTime">A time we just received from the server in response to a request</param>
-        void UpdateServerTimeOffset(double receivedServerTime)
+        async Task UpdateServerTimeOffset(string receivedId, double receivedServerTime)
         {
-            // update the most recent server time we received
-            lastServerTime = receivedServerTime;
-
-            // figure out the most recent roundtrip time
-            var lastRoundtrip = GameHub.UnixTimeMilliseconds - lastRoundtripRequestTime;
-
-            // update our roundtrip samples collection
-            roundtripSamples.Add(lastRoundtrip);
-            while(roundtripSamples.Count > RoundtripSamplesToCollect)
+            if (roundtripRequests.ContainsKey(receivedId) == false)
             {
-                roundtripSamples.RemoveAt(0);
+                throw new Exception("We got a timing request response with an ID we don't know about. This shouldn't happen.");
             }
 
-            // guess what time it was on the server the last time we
-            // sent a time request by taking the time we got back and
-            // subtracting the time it should have taken for our request
-            // to reach to the server
-            var lastAdjustedServerTime = lastServerTime - Ping;
+            double sendTime;
+            if (roundtripRequests.TryRemove(receivedId, out sendTime))
+            {
+                // figure out the most recent roundtrip time
+                var lastRoundtrip = GameHub.UnixTimeMilliseconds - sendTime;
 
-            // now we can calculate our offset from the server time and use
-            // this to calculate the server time at any given moment
-            ServerTimeOffset = lastRoundtripRequestTime - lastAdjustedServerTime;
+                await timingSemaphor.WaitAsync();
+                try
+                {
+                    // update our roundtrip samples collection
+                    roundtripSamples.Add(lastRoundtrip);
+                    while (roundtripSamples.Count > RoundtripSamplesToCollect)
+                    {
+                        roundtripSamples.RemoveAt(0);
+                    }
+                    Ping = roundtripSamples.Average();
+                }
+                finally
+                {
+                    timingSemaphor.Release();
+                }
+
+                // guess what time it was on the server the last time we
+                // sent a time request by taking the time we got back and
+                // subtracting the time it should have taken for our request
+                // to reach to the server
+                var lastAdjustedServerTime = receivedServerTime - Ping;
+
+                // now we can calculate our offset from the server time and use
+                // this to calculate the server time at any given moment
+                ServerTimeOffset = GameHub.UnixTimeMilliseconds - lastAdjustedServerTime;
+            }
         }
         /// <summary>
         /// Connects to the provided server URL and calls
@@ -434,13 +464,13 @@ namespace SignalRed.Client
             };
 
             // handle measuring roundtrip time and server time offset
-            gameHub.On<double>(nameof(IGameClient.ReceiveServerTime), time => UpdateServerTimeOffset(time));
+            gameHub.On<string, double>(nameof(IGameClient.ReceiveServerTime), (id, time) => UpdateServerTimeOffset(id, time));
 
             // handle incoming connection messages
             gameHub.On(nameof(IGameClient.CreateConnection),
-                (Common.Messages.NetworkMessage                 message) => connections.Enqueue(Tuple.Create(message, SignalRedMessageType.Create)));
+                (Common.Messages.NetworkMessage message) => connections.Enqueue(Tuple.Create(message, SignalRedMessageType.Create)));
             gameHub.On(nameof(IGameClient.DeleteConnection),
-                (Common.Messages.NetworkMessage                 message) => connections.Enqueue(Tuple.Create(message, SignalRedMessageType.Delete)));
+                (Common.Messages.NetworkMessage message) => connections.Enqueue(Tuple.Create(message, SignalRedMessageType.Delete)));
             gameHub.On(nameof(IGameClient.ReckonConnections), (List<Common.Messages.NetworkMessage> messages) =>
             {
                 foreach (var message in messages)
@@ -482,7 +512,7 @@ namespace SignalRed.Client
         async Task ApplyDebugLatency()
         {
 #if DEBUG
-            var latency = (int)(rand.NextDouble() * DebugMaxSimulatedLatencyMilliseconds);
+            var latency = rand.Next(MinAveLatencyMilliseconds, MaxAveLatencySeconds);
             await Task.Delay(latency);
 #else
             // NOOP

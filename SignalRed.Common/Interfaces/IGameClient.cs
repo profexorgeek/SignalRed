@@ -29,7 +29,7 @@ namespace SignalRed.Common.Interfaces
         /// </summary>
         /// <param name="milliseconds"></param>
         /// <returns></returns>
-        Task ReceiveServerTime(double milliseconds);
+        Task ReceiveServerTime(string requestId, double milliseconds);
 
         /// <summary>
         /// Called when a new user joins the server
