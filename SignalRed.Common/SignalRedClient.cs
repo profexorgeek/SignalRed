@@ -35,12 +35,12 @@ namespace SignalRed.Client
         private string clientId;
         double lastRoundtripRequestTime;
         double lastServerTime;
+        Random rand = new Random();
         List<double> roundtripSamples = new List<double>();
         ConcurrentQueue<Tuple<EntityStateMessage, SignalRedMessageType>> entities = new ConcurrentQueue<Tuple<EntityStateMessage, SignalRedMessageType>>();
         ConcurrentQueue<Tuple<NetworkMessage, SignalRedMessageType>> connections = new ConcurrentQueue<Tuple<NetworkMessage, SignalRedMessageType>>();
         ConcurrentQueue<GenericMessage> genericMessages = new ConcurrentQueue<GenericMessage>();
         ScreenMessage currentScreen = new ScreenMessage();
-
 
         /// <summary>
         /// The singleton instance of this service.
@@ -75,6 +75,12 @@ namespace SignalRed.Client
         /// How frequently the client should reckon its lists with the server
         /// </summary>
         public float ReckonFrequencySeconds { get; set; } = 3f;
+
+        /// <summary>
+        /// Only implemented in DEBUG builds, adds delay between 0 and value
+        /// to every request to simulate random latency for tolerance testing.
+        /// </summary>
+        public float DebugMaxSimulatedLatencyMilliseconds { get; set; } = 0f;
 
         /// <summary>
         /// The connected or disconnected status of the client.
@@ -378,12 +384,14 @@ namespace SignalRed.Client
         async Task<bool> TryInvoke<T>(string methodName, T message)
         {
             if (!initialized || !Connected || gameHub == null) return false;
+            await ApplyDebugLatency();
             await gameHub.InvokeAsync(methodName, message);
             return true;
         }
         async Task<bool> TryInvoke(string methodName)
         {
             if (!initialized || !Connected || gameHub == null) return false;
+            await ApplyDebugLatency();
             await gameHub.InvokeAsync(methodName);
             return true;
         }
@@ -469,6 +477,16 @@ namespace SignalRed.Client
 
 
 
+        }
+
+        async Task ApplyDebugLatency()
+        {
+#if DEBUG
+            var latency = (int)(rand.NextDouble() * DebugMaxSimulatedLatencyMilliseconds);
+            await Task.Delay(latency);
+#else
+            // NOOP
+#endif
         }
     }
 }

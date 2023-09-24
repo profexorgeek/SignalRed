@@ -187,10 +187,11 @@ namespace SignalRed.Common.Hubs
         }
 
         /// <summary>
-        /// Updates an entity state if it exists using EntityId as the unique key.
-        /// Noop if it doesn't exist because we may have received an update 
-        /// message after a destroy message and we don't want to accidentally 
-        /// resurrect a dead entity.
+        /// Updates an entity state if it exists using EntityId as the unique key
+        /// IF the update received is newer. Stale timestamps are discarded and
+        /// not forwarded on to clients. Noop if the EntityId doesn't exist 
+        /// because we may have received an update  message after a destroy 
+        /// message and we don't want to accidentally resurrect a dead entity.
         /// 
         /// Payloads that have an empty or null EntityId will not be saved on
         /// the server or passed in Reckoning. If you want a payload message that
@@ -200,24 +201,29 @@ namespace SignalRed.Common.Hubs
         /// <param name="message">The payload to be updated</param>
         public async Task UpdateEntity(EntityStateMessage? message)
         {
+            bool shouldSend = false;
             if (!string.IsNullOrWhiteSpace(message.EntityId))
             {
                 await entitiesSemaphor.WaitAsync();
                 try
                 {
                     var existing = entities.Where(p => p.EntityId == message.EntityId).FirstOrDefault();
-                    // if we have an existing payload, we just remove it and replace it
-                    if (existing != null)
+                    // if we have an existing payload, and it's newer
+                    if (existing != null && existing.SendTime < message.SendTime)
                     {
                         entities.Remove(existing);
                         entities.Add(message);
+                        shouldSend = true;
                     }
                 }
                 finally
                 {
                     entitiesSemaphor.Release();
                 }
-                await Clients.All.UpdateEntity(message);
+                if(shouldSend)
+                {
+                    await Clients.All.UpdateEntity(message);
+                }
             }
             else
             {
