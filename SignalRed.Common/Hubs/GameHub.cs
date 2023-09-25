@@ -208,17 +208,23 @@ namespace SignalRed.Common.Hubs
                 try
                 {
                     var existing = entities.Where(p => p.EntityId == message.EntityId).FirstOrDefault();
-                    var staleMessage = existing.SendTime > message.SendTime;
-                    if (staleMessage)
+                    if (existing != null)
                     {
-                        Console.WriteLine($"Discrading stale {message.StateType} message that is {existing.SendTime - message.SendTime} older.");
+                        var staleMessage = existing.SendTime > message.SendTime;
+                        if (staleMessage)
+                        {
+                            Console.WriteLine($"Discrading stale {message.StateType} message that is {existing.SendTime - message.SendTime} older.");
+                        }
+                        else
+                        {
+                            entities.Remove(existing);
+                            entities.Add(message);
+                            shouldSend = true;
+                        }
                     }
-                    // if we have an existing payload, and it's newer
-                    if (existing != null && !staleMessage)
+                    else
                     {
-                        entities.Remove(existing);
-                        entities.Add(message);
-                        shouldSend = true;
+                        Console.WriteLine($"Discarding {message.StateType} update for entity {message.EntityId} that doesn't exist on server");
                     }
                 }
                 finally
