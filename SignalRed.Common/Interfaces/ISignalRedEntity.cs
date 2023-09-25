@@ -15,7 +15,7 @@ namespace SignalRed.Common.Interfaces
         /// The entity owner's unique client ID. This should generally be set by
         /// the SignalRedClient and not directly altered.
         /// </summary>
-        public string OwnerClientId { get; set; }
+        string OwnerClientId { get; set; }
 
         /// <summary>
         /// The entity's unique ID across the network. This is required to know which
@@ -24,7 +24,7 @@ namespace SignalRed.Common.Interfaces
         /// 
         /// This should generally be set by the SignalRedClient and not directly altered.
         /// </summary>
-        public string EntityId { get; set; }
+        string EntityId { get; set; }
 
         /// <summary>
         /// Called when an incoming Creation message is received. Should contain the
@@ -33,7 +33,7 @@ namespace SignalRed.Common.Interfaces
         /// </summary>
         /// <param name="networkState">The initial state to apply</param>
         /// <param name="deltaSeconds">The estimated elasped time since this state was sent in seconds</param>
-        public void ApplyCreationState(T networkState, float deltaSeconds);
+        void ApplyCreationState(T networkState, float deltaSeconds);
 
         /// <summary>
         /// Called when an incoming Update message is received. Should contain the
@@ -42,17 +42,17 @@ namespace SignalRed.Common.Interfaces
         /// </summary>
         /// <param name="networkState">The initial state to apply</param>
         /// <param name="deltaSeconds">The estimated elasped time since this state was sent in seconds</param>
-        public void ApplyUpdateState(T networkState, float deltaSeconds, bool force = false);
+        void ApplyUpdateState(T networkState, float deltaSeconds, bool force = false);
+
+        /// <summary>
+        /// Called when an incoming Destroy message is received.
+        /// </summary>
+        void Destroy(T networkState, float deltaSeconds);
 
         /// <summary>
         /// Called when a state needs to be retrieved from the entity and sent through
         /// the network.
         /// </summary>
-        public T GetState();
-
-        /// <summary>
-        /// Called when an incoming Destroy message is received.
-        /// </summary>
-        public void Destroy();
+        T GetState();
     }
 }
