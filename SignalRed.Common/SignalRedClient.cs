@@ -334,8 +334,8 @@ namespace SignalRed.Client
                 // guess what time it was on the server the last time we
                 // sent a time request by taking the time we got back and
                 // subtracting the time it should have taken for our request
-                // to reach to the server
-                var lastAdjustedServerTime = receivedServerTime - Ping;
+                // to reach to the server (half of the total ping)
+                var lastAdjustedServerTime = receivedServerTime - (Ping / 2f);
 
                 // now we can calculate our offset from the server time and use
                 // this to calculate the server time at any given moment
