@@ -3,11 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.7.34024.191
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SignalRed.Client", "SignalRed.Client\SignalRed.Client.csproj", "{79F69808-0C62-4864-A427-1A6738D2DCAB}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SignalRed.Common", "SignalRed.Common\SignalRed.Common.csproj", "{00BE18CF-DADC-4DFF-8848-29E1175D648E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalRed.Server", "SignalRed.Server\SignalRed.Server.csproj", "{5FDB863A-3BE2-4BE4-8B7B-E673BF2A42AD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SignalRed.Server", "SignalRed.Server\SignalRed.Server.csproj", "{5FDB863A-3BE2-4BE4-8B7B-E673BF2A42AD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,10 +13,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{79F69808-0C62-4864-A427-1A6738D2DCAB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{79F69808-0C62-4864-A427-1A6738D2DCAB}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{79F69808-0C62-4864-A427-1A6738D2DCAB}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{79F69808-0C62-4864-A427-1A6738D2DCAB}.Release|Any CPU.Build.0 = Release|Any CPU
 		{00BE18CF-DADC-4DFF-8848-29E1175D648E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{00BE18CF-DADC-4DFF-8848-29E1175D648E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{00BE18CF-DADC-4DFF-8848-29E1175D648E}.Release|Any CPU.ActiveCfg = Release|Any CPU
