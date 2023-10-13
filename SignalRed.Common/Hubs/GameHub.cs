@@ -19,6 +19,37 @@ namespace SignalRed.Common.Hubs
         static SemaphoreSlim entitiesSemaphor = new SemaphoreSlim(1);
 
         /// <summary>
+        /// Disconnects all clients, clears all entities, and restores server to
+        /// a clean state.
+        /// </summary>
+        public async Task ResetServerStatus()
+        {
+            await Clients.All.FailConnection("Server was forced to restart.");
+
+            await connectionsSemaphor.WaitAsync();
+            try
+            {
+                connections.Clear();
+            }
+            finally
+            {
+                connectionsSemaphor.Release();
+            }
+            
+            await entitiesSemaphor.WaitAsync();
+            try
+            {
+                entities.Clear();
+            }
+            finally
+            {
+                entitiesSemaphor.Release();
+            }
+
+            currentScreen = new ScreenMessage("", "", UnixTimeMilliseconds, "None");
+        }
+
+        /// <summary>
         /// Called by a client when it wants all clients to move
         /// to the target screen.
         /// </summary>

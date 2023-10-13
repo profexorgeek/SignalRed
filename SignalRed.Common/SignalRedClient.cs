@@ -2,6 +2,7 @@
 using SignalRed.Common.Hubs;
 using SignalRed.Common.Interfaces;
 using SignalRed.Common.Messages;
+using System;
 using System.Collections.Concurrent;
 
 namespace SignalRed.Client
@@ -24,7 +25,6 @@ namespace SignalRed.Client
 
     public class SignalRedClient
     {
-
         private static SignalRedClient instance;
         private HubConnection? gameHub;
         private bool initialized = false;
@@ -40,6 +40,12 @@ namespace SignalRed.Client
         ConcurrentQueue<GenericMessage> genericMessages = new ConcurrentQueue<GenericMessage>();
         ScreenMessage currentScreen = new ScreenMessage();
         SemaphoreSlim timingSemaphor = new SemaphoreSlim(1);
+
+        /// <summary>
+        /// An action that will be called if the connection fails after connecting
+        /// to a server.
+        /// </summary>
+        public Action<string> OnConnectionFailed { get; set; }
 
         /// <summary>
         /// The singleton instance of this service.
@@ -116,10 +122,14 @@ namespace SignalRed.Client
         /// </summary>
         /// <param name="gameClient">The game client, usually the game engine, which
         /// must implement IGameClient</param>
-        public void Initialize()
+        public void Initialize(Action<string> connectionFailAction = null)
         {
             clientId = Guid.NewGuid().ToString("N");
             localEntityIndex = 0;
+            if(connectionFailAction != null)
+            {
+                OnConnectionFailed = connectionFailAction;
+            }
             initialized = true;
         }
         /// <summary>
@@ -175,6 +185,13 @@ namespace SignalRed.Client
             _ = DisconnectAsync(onDisconnectedCallback);
         }
 
+        /// <summary>
+        /// Forces the server to disconnect all clients and wipe all game state
+        /// </summary>
+        public void ForceServerReset()
+        {
+            _ = TryInvoke(nameof(GameHub.ResetServerStatus));
+        }
 
         /// <summary>
         /// Makes a request to the server to transition screens
@@ -453,12 +470,7 @@ namespace SignalRed.Client
                 return;
             }
 
-            gameHub.Closed += (exception) =>
-            {
-                Connected = false;
-                // TODO: how to notify game client that connection failed?
-                return Task.CompletedTask;
-            };
+            gameHub.Closed += ConnectionClosed;
 
             // handle measuring roundtrip time and server time offset
             gameHub.On<string, double>(nameof(IGameClient.ReceiveServerTime), (id, time) => UpdateServerTimeOffset(id, time));
@@ -474,6 +486,11 @@ namespace SignalRed.Client
                 {
                     connections.Enqueue(Tuple.Create(message, SignalRedMessageType.Reckon));
                 }
+            });
+            gameHub.On(nameof(IGameClient.FailConnection), async (string reason) =>
+            {
+                await DisconnectAsync();
+                await ConnectionClosed(reason);
             });
 
             // handle incoming entity messages
@@ -498,12 +515,6 @@ namespace SignalRed.Client
             // handle incoming screen message
             gameHub.On<ScreenMessage>(nameof(IGameClient.MoveToScreen),
                 message => currentScreen = message);
-
-
-
-
-
-
         }
 
         async Task ApplyDebugLatency()
@@ -514,6 +525,17 @@ namespace SignalRed.Client
 #else
             // NOOP
 #endif
+        }
+        Task ConnectionClosed(Exception? exception)
+        {
+            return ConnectionClosed(exception?.Message);
+        }
+        Task ConnectionClosed(string? reason)
+        {
+            Connected = false;
+            var failReason = reason != null ? reason : "Connection closed.";
+            OnConnectionFailed?.Invoke(failReason);
+            return Task.CompletedTask;
         }
     }
 }

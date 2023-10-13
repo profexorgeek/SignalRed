@@ -11,11 +11,10 @@ namespace SignalRed.Common.Interfaces
     public interface IGameClient
     {
         /// <summary>
-        /// Called when a connection fails with an exception.
-        /// Allows the game client to react to the exception.
+        /// Called when a connection fails
         /// </summary>
-        /// <param name="exception">The exception that caused the failed connection.</param>
-        Task FailConnection(Exception exception);
+        /// <param name="reason">The reason the connection failed</param>
+        Task FailConnection(string reason);
 
         /// <summary>
         /// Called when a message is received that clients should migrate to a
