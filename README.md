@@ -4,6 +4,8 @@
 
 SignalRed is a multiplayer networking library that uses Microsoft's SignalR as a transport layer. It was written to make it easier to build indie games in C# with simple, opinionated networking patterns.
 
+At a high level, SignalRed defines the concept of "entities", game objects that are synchronized through the network. Each entity has an "entity state" which is a data representation of its state in the game. SignalRed uses a collection of unique message types to share entity states across all connected clients so they can synchronize with each other. It provides a Server that primarily acts as a dumb message forwarding hub, and a Client library that provides abstractions for sending and receiving messages.
+
 ## What/Who Should Use SignalRed
 
 If you want a simple networking solution in C#, with the ability to scale your server in the cloud, SignalRed is a good fit. Since it uses SignalR, the server is platform agnostic and it's possible to build clients across mobile, web, and desktop that all interact with the same server.
